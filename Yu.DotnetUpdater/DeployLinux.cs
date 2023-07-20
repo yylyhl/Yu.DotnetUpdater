@@ -70,6 +70,32 @@ namespace Yu.DotnetUpdater
                 {
                     DaemonUpdate(services[i].ServiceName, zipFile, updatePath, updateMode);
                 }
+                #region 设置开机启动
+                if (string.IsNullOrWhiteSpace(services[i].SystemdService))
+                {
+                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].ServiceName}->设置开机启动...");
+                    var systemdServiceFile = Path.Combine("usr/lib/systemd/system", services[i].SystemdService);
+                    if (File.Exists(systemdServiceFile))
+                    {
+                        StartProcess("systemctl", $"enable {services[i].SystemdService}", true);
+                        Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].ServiceName}->设置开机启动完成");
+                    }
+                    else
+                    {
+                        var systemdServiceFile2 = Path.Combine(updatePath, services[i].ServiceName, services[i].SystemdService);
+                        if (File.Exists(systemdServiceFile2))
+                        {
+                            File.Copy(systemdServiceFile2, systemdServiceFile, true);
+                            StartProcess("systemctl", $"enable {services[i].SystemdService}", true);
+                            Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].ServiceName}->设置开机启动完成");
+                        }
+                        else
+                        {
+                            Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].ServiceName}->开机启动文件不存在：{systemdServiceFile}");
+                        }
+                    }
+                }
+                #endregion
                 stopwatch.Stop();
                 Info($"[{services[i].UpdatePack}]更新耗时:{stopwatch.ElapsedMilliseconds}ms");
                 Thread.Sleep(1000);

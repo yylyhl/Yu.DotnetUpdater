@@ -92,5 +92,9 @@
         /// [Port>0]，针对IIS，更新后访问一次OpenUrl让后续响应更快；
         /// </summary>
         public string OpenUrl { get; set; }
+        /// <summary>
+        /// 针对linux系统，开机启动文件；若无需提前配置好才可开机启动；
+        /// </summary>
+        public string SystemdService { get; set; }
     }
 }
