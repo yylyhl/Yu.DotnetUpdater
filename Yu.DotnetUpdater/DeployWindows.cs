@@ -28,7 +28,7 @@ namespace Yu.DotnetUpdater
         /// </summary>
         /// <param name="updateIndexs">待更新服务Services索引</param>
 
-        internal static void StartForWindow(int[] updateIndexs, UpdateServiceConf[] services)
+        internal static void Start(int[] updateIndexs, UpdateServiceConf[] services)
         {
             var stopwatch = new Stopwatch();
             var deployPath = Configuration["DeployPath"];
@@ -64,24 +64,20 @@ namespace Yu.DotnetUpdater
                 }
                 #endregion
                 var updateMode = (UpdateMode)services[i].UpdateMode;
+                Info($"[{DateTime.Now:HH:mm:ss.fff}]更新模式：{updateMode}");
                 if (!string.IsNullOrWhiteSpace(services[i].AppPool))
                 {
                     IISSiteUpdate(services[i], zipFile, updatePath, updateMode);
                 }
                 else
                 {
-                    switch (updateMode)
+                    if (updateMode == UpdateMode.Cold)
                     {
-                        case UpdateMode.Cold:
-                            ColdUpdate(services[i], zipFile, updatePath);
-                            break;
-                        case UpdateMode.Cold2:
-                            ColdUpdate2(services[i], zipFile, updatePath);
-                            break;
-                        case UpdateMode.Hot:
-                        case UpdateMode.Hot2:
-                            HotUpdate(updateMode, services[i], zipFile, deployPath, updatePath);
-                            break;
+                        ColdUpdate(services[i], zipFile, updatePath);
+                    }
+                    else
+                    {
+                        HotUpdate(updateMode, services[i], zipFile, deployPath, updatePath);
                     }
                 }
                 stopwatch.Stop();
@@ -96,8 +92,8 @@ namespace Yu.DotnetUpdater
         /// IIS站点更新
         /// </summary>
         /// <remarks>
-        /// 冷更新：停止应用程序池-->停止站点-->更新文件-->启动应用程序池-->启动站点<br/>
-        /// 热更新：原文件重命名-->更新文件-->回收应用程序池-->数秒后清理重命名的文件<br/>
+        /// 方式一：停止应用程序池-->停止站点-->更新文件-->启动应用程序池-->启动站点<br/>
+        /// 方式二：原文件重命名-->更新文件-->回收应用程序池-->数秒后清理重命名的文件<br/>
         /// </remarks>
         private static void IISSiteUpdate(UpdateServiceConf service, string zipFile, string updatePath, UpdateMode mode)
         {
@@ -105,16 +101,13 @@ namespace Yu.DotnetUpdater
             try
             {
                 stopwatch.Start();
-                if (mode != UpdateMode.Cold && mode != UpdateMode.Cold2)
+                if (mode != UpdateMode.Cold)
                 {
-                    DelTmpFile(updatePath);
                     RenameTargetFile(zipFile, updatePath, service.ServiceName);
                     Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.UpdatePack}->解压Zip文件中...");
                     ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
                     ApppoolStatusUpdate(service.AppPool, 0);
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.UpdatePack}->等待旧程序结束并清理缓存文件...");
-                    DelTmpFile(updatePath, 3);
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.UpdatePack}->清理完成");
+                    new Thread(delegate () { DelTmpFile(updatePath, 10, false); }) { IsBackground = true }.Start();
                 }
                 else
                 {
@@ -129,10 +122,21 @@ namespace Yu.DotnetUpdater
                 if (!string.IsNullOrWhiteSpace(service.OpenUrl))
                 {
                     Thread.Sleep(2000);
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.UpdatePack}->请求一次：{service.OpenUrl}");
-                    //Process.Start(new ProcessStartInfo { UseShellExecute = true, FileName = service.OpenUrl });//, Arguments = "chrome.exe"
-                    using var client = new HttpClient();
-                    client.PostAsync(service.OpenUrl, default).Wait(10000);
+                    Task.Run(async () =>
+                    {
+                        Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.UpdatePack}->请求一次：{service.OpenUrl}");
+                        try
+                        {
+                            using var client = new HttpClient();
+                            var resp = await client.PostAsync(service.OpenUrl, default);
+                            await resp.Content.ReadAsStringAsync();
+                            //client.PostAsync(service.OpenUrl, default).ContinueWith(res => res.Result.Content.ReadAsStringAsync().Wait(10000));
+                        }
+                        catch (Exception ex)
+                        {
+                            WriteRed($"[{DateTime.Now:HH:mm:ss.fff}]请求url出错[{service.OpenUrl}]{ex.Message}]{ex}");
+                        }
+                    });
                 }
             }
             catch (Exception ex)
@@ -208,12 +212,11 @@ namespace Yu.DotnetUpdater
         }
         #endregion
 
-        #region Service/Nginx-冷更新：停止服务-->更新文件-->启动服务
+        #region Service-冷更新：原文件重命名-->更新文件-->停止服务-->启动服务
         /// <summary>
-        /// Service/Nginx-冷更新：停止服务-->更新文件-->启动服务
+        /// Service-冷更新：原文件重命名-->更新文件-->停止服务-->启动服务
         /// </summary>
-        /// <param name="serviceName">服务名</param>
-        /// <param name="serviceDescription">服务说明</param>
+        /// <param name="service">服务配置</param>
         /// <param name="zipFile">更新包</param>
         /// <param name="updatePath">更新路径</param>
         /// <param name="reTry">重试次数</param>
@@ -225,71 +228,8 @@ namespace Yu.DotnetUpdater
             {
                 stopwatch.Start();
                 CreateService(updatePath, service.ServiceName, service.ExecuteFileName, service.ServiceDescription);
-                #region 初次部署：针对在同一主机部署多套服务，目录不同但执行文件一致
-                if (service.ServiceName != service.ExecuteFileName)
-                {
-                    string oldPath = Path.Combine(Configuration["DeployPath"]!, service.ExecuteFileName);
-                    string[] jsons = Directory.GetFiles(oldPath, "*.json");
-                    foreach (string file in jsons)
-                    {
-                        var curName = Path.GetFileName(file);
-                        var filePath = Path.Combine(updatePath, curName);
-                        if (!File.Exists(filePath)) File.Copy(file, filePath);
-                    }
-                    string[] configs = Directory.GetFiles(oldPath, "*.config");
-                    foreach (string file in configs)
-                    {
-                        var curName = Path.GetFileName(file);
-                        var filePath = Path.Combine(updatePath, curName);
-                        if (!File.Exists(filePath)) File.Copy(file, filePath);
-                    }
-                }
-                #endregion
-                using (var sc = new ServiceController(service.ServiceName))
-                {
-                    if (!StopService(sc)) return;//停止服务
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]->解压Zip文件中...{sc.ServiceName}");
-                    ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
-                    StartService(sc);//启动服务
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{sc.ServiceName}->服务升级完成");
-                }
-            }
-            catch (Exception ex)
-            {
-                WriteRed($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->[{nameof(ColdUpdate)}]{ex.Message}");
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->等待重试...");
-                Thread.Sleep(2000);
-                ColdUpdate(service, zipFile, updatePath, reTry - 1);
-            }
-            finally
-            {
-                stopwatch.Stop();
-                WriteGreen($"[{service.ServiceName}]本次更新耗时:{stopwatch.ElapsedMilliseconds}ms");
-            }
-        }
-        #endregion
-        #region Service/Nginx-冷更新：原文件重命名-->更新文件-->停止服务-->启动服务
-        /// <summary>
-        /// Service/Nginx-冷更新：原文件重命名-->更新文件-->停止服务-->启动服务
-        /// </summary>
-        /// <param name="serviceName">服务名</param>
-        /// <param name="serviceDescription">服务说明</param>
-        /// <param name="zipFile">更新包</param>
-        /// <param name="updatePath">更新路径</param>
-        /// <param name="reTry">重试次数</param>
-        private static void ColdUpdate2(UpdateServiceConf service, string zipFile, string updatePath, int reTry = 1)
-        {
-            if (reTry < 0) return;
-            var stopwatch = new Stopwatch();
-            try
-            {
-                stopwatch.Start();
-                CreateService(updatePath, service.ServiceName, service.ExecuteFileName, service.ServiceDescription);
-
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->重命名文件...");
-                DelTmpFile(updatePath);
                 RenameTargetFile(zipFile, updatePath, service.ServiceName);
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]->解压Zip文件中...{service.ServiceName}");
+                Info($"[{DateTime.Now:HH:mm:ss.fff}]->{zipFile}->解压Zip文件至{updatePath}...");
                 ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
                 #region 初次部署：针对在同一主机部署多套服务，目录不同但执行文件一致
                 if (service.ServiceName != service.ExecuteFileName)
@@ -315,9 +255,7 @@ namespace Yu.DotnetUpdater
                 {
                     if (!StopService(sc)) return;//停止服务
                     StartService(sc);//启动服务
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{sc.ServiceName}->清理重命名文件...");
-                    DelTmpFile(updatePath, 3);
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{sc.ServiceName}->服务升级完成");
+                    new Thread(delegate () { DelTmpFile(updatePath, 10, false); }) { IsBackground = true }.Start();
                 }
             }
             catch (Exception ex)

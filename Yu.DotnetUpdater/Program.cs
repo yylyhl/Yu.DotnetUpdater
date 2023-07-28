@@ -22,7 +22,7 @@ Util.Configuration = new ConfigurationBuilder()
     //.Add(new Microsoft.Extensions.Configuration.Json.JsonConfigurationSource { Path = "updatesettings.json", ReloadOnChange = true })
     .Build();
 var stopwatch = new System.Diagnostics.Stopwatch();
-var updateConf = Util.Configuration.GetSection("Services").Get<UpdateServiceConf[]>();
+var updateConf = Util.Configuration.GetSection("DeployServices").Get<UpdateServiceConf[]>();
 if (updateConf == null || !updateConf.Any())
 {
     Util.WriteYellow(">无待更新服务：appsetting.json-Services");
@@ -68,7 +68,12 @@ Util.Info($">更新开始[{DateTime.Now:HH:mm:ss.fff}]...\n");
 stopwatch.Restart();
 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 {
-    DeployWindows.StartForWindow(vals, updateConf);
+    DeployWindows.Start(vals, updateConf);
+    Close(stopwatch, 10);
+}
+else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+{
+    DeployLinux.Start(vals, updateConf);
     Close(stopwatch, 10);
 }
 else

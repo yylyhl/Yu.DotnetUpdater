@@ -27,7 +27,7 @@ namespace Yu.DotnetUpdater
     public class DeployLinux : Util
     {
         #region StartForLinux
-        public static void StartForLinux(int[] updateIndexs, UpdateServiceConf[] services)
+        public static void Start(int[] updateIndexs, UpdateServiceConf[] services)
         {
             var stopwatch = new Stopwatch();
             var deployPath = Configuration["DeployPath"];
@@ -48,28 +48,33 @@ namespace Yu.DotnetUpdater
                 }
                 #endregion
                 var updatePath = Path.Combine(deployPath, services[i].Path);
-                #region 备份更新
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].ServiceName}->备份更新...");
-                string bakPathBase = Path.Combine(deployPath, "bak", services[i].ServiceName);
-                string pathBak = Path.Combine(bakPathBase, DateTime.Now.ToString(services[i].BakDirectoryFormat));
-                CreateFolder(updatePath);
-                StartProcess("mkdir", $"{pathBak} -p", false);
-                StartProcess("cp", $"-r {updatePath} {pathBak}", false);
-                //CopyFolderFile(updatePath, pathBak);
+                #region 备份原文件
+                if (UpdateServiceConf.BakDirectoryNameDemo.Contains(services[i].BakDirectoryFormat))
+                {
+                    string bakPathBase = Path.Combine(deployPath, "bak");
+                    string pathBak = Path.Combine(bakPathBase, DateTime.Now.ToString(services[i].BakDirectoryFormat));
+                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].ServiceName}->备份原文件...");
+                    //CreateFolder(updatePath);
+                    //CopyFolderFile(updatePath, pathBak, true, "logs", "log");
+                    StartProcess("mkdir", $"{pathBak} -p", true);
+                    StartProcess("cp", $"-r {updatePath} {pathBak}", true);
 
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].ServiceName}->....................................");
-                DeleteOldBak(bakPathBase);
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].ServiceName}->备份更新完成."); 
+                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].ServiceName}->....................................");
+                    DeleteOldBak(bakPathBase);
+                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].ServiceName}->备份原文件完成.");
+                }
                 #endregion
                 var updateMode = (UpdateMode)services[i].UpdateMode;
-                if (services[i].Ports.Any(p => p > 0))
-                {
-                    WebUpdate(services[i], zipFile, updatePath, updateMode);
-                }
-                else
-                {
-                    DaemonUpdate(services[i].ServiceName, zipFile, updatePath, updateMode);
-                }
+                Info($"[{DateTime.Now:HH:mm:ss.fff}]更新模式：{updateMode}");
+                Update(updateMode, services[i], zipFile, updatePath);
+                //if (services[i].Ports.Any(p => p > 0))
+                //{
+                //    WebUpdate(services[i], zipFile, updatePath, updateMode);
+                //}
+                //else
+                //{
+                //    DaemonUpdate(services[i].ServiceName, zipFile, updatePath, updateMode);
+                //}
                 #region 设置开机启动
                 if (string.IsNullOrWhiteSpace(services[i].SystemdService))
                 {
@@ -103,69 +108,77 @@ namespace Yu.DotnetUpdater
         }
         #endregion
 
-        #region Update Docker
-        private static void UpdateByDocker()
-        {
-            //按顺序执行：
-            //1.获取已有镜像、容器
-            //2.构建新镜像：cd /home/deploy/MTT.Kitchen.AlgorithmCallPy && sudo docker build -t algorithmcallpy:1.0 .
-            //3.停止并删除旧容器：sudo docker stop AlgorithmGrpcCall1 && sudo docker rm AlgorithmGrpcCall1
-            //4.运行新容器：sudo docker run --restart=always --name AlgorithmGrpcCall1 -p 7801:7800 --privileged=true -v /home/deploy/MTT.Kitchen.AlgorithmCallPy/Logs:/app/Logs algorithmcallpy:1.0 &
-            //5.删除旧镜像：sudo docker rmi algorithmcallpy
-            var workDir = "/home/deploy/MTT.Kitchen.AlgorithmCallPy";
-            var dockerRunning = GetDocker("ps", "->7800");
-            var dockerAll = GetDocker("ps -a", "->7800");
-            var imageName = dockerRunning.FirstOrDefault().Split(',')[2];
-            var imageNameNew = imageName.Replace(":new", "") + ":new";
-
-            StartProcess("docker", $"build -t {imageNameNew} .", false);
-            foreach (var docker in dockerAll)
-            {
-                StartProcess("docker", "stop " + docker.Split(',')[0], false);
-                StartProcess("docker", "rm " + docker.Split(',')[0], false);
-                StartProcess("docker", $"run --restart=always --name {docker.Split(',')[1]} -p {docker.Split(',')[3]}:7800 --privileged=true -v {workDir}/Logs:/app/Logs {imageNameNew} & ", false);
-            }
-            StartProcess("docker", "rmi " + imageName, false);
-        }
+        #region Update
+        //已启动的服务：systemctl list-unit-files|grep enabled
         /// <summary>
-        /// 获取docker容器数据 
+        /// 进程更新
         /// </summary>
-        /// <param name="dockerParams">docker参数</param>
-        /// <param name="keyword">关键字：镜像名/端口/容器名</param>
-        /// <returns>["CONTAINER ID, NAMES, IMAGE, PORT",......]</returns>
-        private static List<string> GetDocker(string dockerParams, string keyword)
+        private static void Update(UpdateMode mode, UpdateServiceConf service, string zipFile, string updatePath, int reTry = 1)
         {
-            string result = StartProcess("docker", dockerParams, true);//终端输出
-            if (string.IsNullOrWhiteSpace(result)) return default;
-            Info($">------------docker {dockerParams} BEGIN------------");
-            Info($">{result}");
-            Info($">------------docker {dockerParams} END------------");
-            string[] items = result.Split('\n', '\r', '\t');
-            var dockers = new List<string>();
-            foreach (string item in items)
+            if (reTry < 1) return;
+            var stopwatch = new Stopwatch();
+            try
             {
-                if (string.IsNullOrWhiteSpace(item) || !item.Contains(keyword)) continue;
-                //CONTAINER ID   IMAGE                            COMMAND                    CREATED          STATUS          PORTS                                             NAMES
-                //a9f5f7666981   algorithmcallpy                  "python3 AlgorithmGr…"    32 minutes ago   Up 32 minutes   80 / tcp, 443 / tcp, 0.0.0.0:7802->7800 / tcp     AlgorithmGrpcCall2
-                string[] vals = item.Split(' ');
-                var imageName = "";
-                for (int i = 1; i < vals.Length; i++)
+                stopwatch.Start();
+                /*
+                 冷更新：关闭原进程+启动新进程
+
+                 热更新：启动新进程+关闭原进程（视情况）
+                 */
+                var oldPid = GetPidFromPs($"{service.ServiceName}.dll");
+                Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->原进程pid[{oldPid}]");
+                Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->解压Zip文件中...");
+                ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
+
+                if (mode == UpdateMode.Cold)
                 {
-                    imageName = vals[i];
-                    if (!string.IsNullOrWhiteSpace(imageName)) break;
-                }
-                var port = "";
-                foreach (var val in vals)
-                {
-                    if (val.Contains(keyword))
+                    #region 关闭原进程+启动新进程
+                    //string oneCmd = $"cd {updatePath} && nohup dotnet {serviceName}.dll &";
+                    //if (!string.IsNullOrWhiteSpace(oldPid))
+                    //{
+                    //    oneCmd = $"kill -15 {oldPid} && {oneCmd}";
+                    //}
+                    //Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->关闭原进程+启动新进程：{oneCmd}");
+                    //StartProcess(oneCmd, string.Empty, false);
+                    //Thread.Sleep(3000);
+                    //StartProcess("kill", $"-9 {oldPid}", false);
+                    #endregion
+                    if (!string.IsNullOrWhiteSpace(oldPid))
                     {
-                        port = val.Substring(val.IndexOf(keyword) - 4, 4);
-                        break;
+                        Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->关闭原进程[{oldPid}]...");
+                        StartProcess("kill", $"-15 {oldPid}", false);
+                        Thread.Sleep(3000);
+                        StartProcess("kill", $"-9 {oldPid}", false);
+                    }
+                    string dotnetArg = Path.Combine(updatePath, $"{service.ServiceName}.dll &");
+                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->启动新进程：dotnet {dotnetArg}");
+                    StartProcess("dotnet", dotnetArg, false);
+                }
+                else
+                {
+                    string dotnetArg = Path.Combine(updatePath, $"{service.ServiceName}.dll &");
+                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->启动新进程：dotnet {dotnetArg}");
+                    StartProcess("dotnet", dotnetArg, false);
+                    if (!string.IsNullOrWhiteSpace(oldPid))
+                    {
+                        Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->关闭原进程[{oldPid}]...");
+                        StartProcess("kill", $"-15 {oldPid}", false);
+                        Thread.Sleep(3000);
+                        StartProcess("kill", $"-9 {oldPid}", false);
                     }
                 }
-                dockers.Add($"{vals[0]},{vals[^1]},{imageName},{port}");
+                Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->任务完成");
             }
-            return dockers;
+            catch (Exception ex)
+            {
+                WriteRed($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->[{nameof(DaemonUpdate)}]{ex}");
+                //Update(service.ServiceName, zipFile, updatePath, mode, reTry - 1);
+            }
+            finally
+            {
+                stopwatch.Stop();
+                Info($"[{service.ServiceName}]本次更新耗时:{stopwatch.ElapsedMilliseconds}ms");
+            }
         }
         #endregion
 
@@ -185,7 +198,7 @@ namespace Yu.DotnetUpdater
                 Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->解压Zip文件中...");
                 ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
 
-                if (mode == UpdateMode.Cold || mode == UpdateMode.Cold2)
+                if (mode == UpdateMode.Cold)
                 {
                     #region 关闭原进程+启动新进程
                     //string oneCmd = $"cd {updatePath} && nohup dotnet {serviceName}.dll &";
@@ -195,15 +208,19 @@ namespace Yu.DotnetUpdater
                     //}
                     //Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->关闭原进程+启动新进程：{oneCmd}");
                     //StartProcess(oneCmd, string.Empty, false);
+                    //Thread.Sleep(3000);
+                    //StartProcess("kill", $"-9 {oldPid}", false);
                     #endregion
                     if (!string.IsNullOrWhiteSpace(oldPid))
                     {
                         Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->关闭原进程[{oldPid}]...");
-                        StartProcess("kill", "-15 " + oldPid, false);
+                        StartProcess("kill", $"-15 {oldPid}", false);
                     }
                     string dotnetArg = Path.Combine(updatePath, $"{serviceName}.dll &");
                     Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->启动新进程：dotnet {dotnetArg}");
                     StartProcess("dotnet", dotnetArg, false);
+                    Thread.Sleep(3000);
+                    StartProcess("kill", $"-9 {oldPid}", false);
                 }
                 else
                 {
@@ -213,7 +230,9 @@ namespace Yu.DotnetUpdater
                     if (!string.IsNullOrWhiteSpace(oldPid))
                     {
                         Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->关闭原进程[{oldPid}]...");
-                        StartProcess("kill", "-15 " + oldPid, false);
+                        StartProcess("kill", $"-15 {oldPid}", false);
+                        Thread.Sleep(3000);
+                        StartProcess("kill", $"-9 {oldPid}", false);
                     }
                 }
                 Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->任务完成");
@@ -241,15 +260,18 @@ namespace Yu.DotnetUpdater
             try
             {
                 stopwatch.Start();
+
                 var pid = GetPidFromPs($"{service.ServiceName}.dll");
                 var portOld = GetPortByPid(pid);
-                if (mode == UpdateMode.Cold || mode == UpdateMode.Cold2)
+                if (mode == UpdateMode.Cold)
                 {
                     Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->关闭旧应用程序[pid:{pid},port:{portOld}]中...");
                     StartProcess("kill", $"-15 {pid}", false);
                     Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->[{retryNum}]解压Zip文件中...");
                     ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
                     StartByNewPort(portOld, service.ServiceName, updatePath);
+                    Thread.Sleep(3000);
+                    StartProcess("kill", "-9 " + pid, false);
                 }
                 else
                 {
@@ -303,6 +325,8 @@ namespace Yu.DotnetUpdater
             {
                 Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->关闭旧应用程序[pid:{dotnetPid},port:{port}]中...");
                 StartProcess("kill", $"-15 {dotnetPid}", false);
+                Thread.Sleep(3000);
+                StartProcess("kill", $"-9 {dotnetPid}", false);
             }
         }
         /// <summary>
@@ -387,6 +411,72 @@ namespace Yu.DotnetUpdater
                 }
             }
             return pid;
+        }
+        #endregion
+
+        #region Update Docker
+        private static void UpdateByDocker()
+        {
+            //按顺序执行：
+            //1.获取已有镜像、容器
+            //2.构建新镜像：cd /home/deploy/MTT.Kitchen.AlgorithmCallPy && sudo docker build -t algorithmcallpy:1.0 .
+            //3.停止并删除旧容器：sudo docker stop AlgorithmGrpcCall1 && sudo docker rm AlgorithmGrpcCall1
+            //4.运行新容器：sudo docker run --restart=always --name AlgorithmGrpcCall1 -p 7801:7800 --privileged=true -v /home/deploy/MTT.Kitchen.AlgorithmCallPy/Logs:/app/Logs algorithmcallpy:1.0 &
+            //5.删除旧镜像：sudo docker rmi algorithmcallpy
+            var workDir = "/home/deploy/MTT.Kitchen.AlgorithmCallPy";
+            var dockerRunning = GetDocker("ps", "->7800");
+            var dockerAll = GetDocker("ps -a", "->7800");
+            var imageName = dockerRunning.FirstOrDefault().Split(',')[2];
+            var imageNameNew = imageName.Replace(":new", "") + ":new";
+
+            StartProcess("docker", $"build -t {imageNameNew} .", false);
+            foreach (var docker in dockerAll)
+            {
+                StartProcess("docker", "stop " + docker.Split(',')[0], false);
+                StartProcess("docker", "rm " + docker.Split(',')[0], false);
+                StartProcess("docker", $"run --restart=always --name {docker.Split(',')[1]} -p {docker.Split(',')[3]}:7800 --privileged=true -v {workDir}/Logs:/app/Logs {imageNameNew} & ", false);
+            }
+            StartProcess("docker", "rmi " + imageName, false);
+        }
+        /// <summary>
+        /// 获取docker容器数据 
+        /// </summary>
+        /// <param name="dockerParams">docker参数</param>
+        /// <param name="keyword">关键字：镜像名/端口/容器名</param>
+        /// <returns>["CONTAINER ID, NAMES, IMAGE, PORT",......]</returns>
+        private static List<string> GetDocker(string dockerParams, string keyword)
+        {
+            string result = StartProcess("docker", dockerParams, true);//终端输出
+            if (string.IsNullOrWhiteSpace(result)) return default;
+            Info($">------------docker {dockerParams} BEGIN------------");
+            Info($">{result}");
+            Info($">------------docker {dockerParams} END------------");
+            string[] items = result.Split('\n', '\r', '\t');
+            var dockers = new List<string>();
+            foreach (string item in items)
+            {
+                if (string.IsNullOrWhiteSpace(item) || !item.Contains(keyword)) continue;
+                //CONTAINER ID   IMAGE                            COMMAND                    CREATED          STATUS          PORTS                                             NAMES
+                //a9f5f7666981   algorithmcallpy                  "python3 AlgorithmGr…"    32 minutes ago   Up 32 minutes   80 / tcp, 443 / tcp, 0.0.0.0:7802->7800 / tcp     AlgorithmGrpcCall2
+                string[] vals = item.Split(' ');
+                var imageName = "";
+                for (int i = 1; i < vals.Length; i++)
+                {
+                    imageName = vals[i];
+                    if (!string.IsNullOrWhiteSpace(imageName)) break;
+                }
+                var port = "";
+                foreach (var val in vals)
+                {
+                    if (val.Contains(keyword))
+                    {
+                        port = val.Substring(val.IndexOf(keyword) - 4, 4);
+                        break;
+                    }
+                }
+                dockers.Add($"{vals[0]},{vals[^1]},{imageName},{port}");
+            }
+            return dockers;
         }
         #endregion
     }

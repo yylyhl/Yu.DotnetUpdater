@@ -2,7 +2,6 @@
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace Yu.DotnetUpdater
 {
@@ -114,6 +113,7 @@ namespace Yu.DotnetUpdater
         /// </summary>
         public static void RenameTargetFile(string zipFile, string updatePath, string serviceName)
         {
+            Info($"[{DateTime.Now:HH:mm:ss.fff}]{updatePath}->清理 *.temp 文件...");
             DelTmpFile(updatePath);
             Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->重命名目标文件...");
             List<string> dllNames = GetZipNames(zipFile);
@@ -140,9 +140,9 @@ namespace Yu.DotnetUpdater
         /// <summary>
         /// 删除临时文件
         /// </summary>
-        public static void DelTmpFile(string updatePath, int sec = 0)
+        public static void DelTmpFile(string updatePath, int waitSeconds = 0, bool outputLog = true)
         {
-            Thread.Sleep(sec * 1000);
+            if (waitSeconds > 0) Thread.Sleep(waitSeconds * 1000);
             string[] files = Directory.GetFiles(updatePath, "*.temp");
             foreach (var file in files)
             {
