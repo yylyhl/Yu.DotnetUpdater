@@ -38,7 +38,7 @@ namespace Yu.DotnetUpdater
         /// </summary>
         public static void Info(string msg)
         {
-            Console.WriteLine(msg);
+            Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}]{msg}");
         }
         /// <summary>
         /// Console.WriteLine(msg);Green
@@ -113,9 +113,9 @@ namespace Yu.DotnetUpdater
         /// </summary>
         public static void RenameTargetFile(string zipFile, string updatePath, string serviceName)
         {
-            Info($"[{DateTime.Now:HH:mm:ss.fff}]{updatePath}->清理 *.temp 文件...");
+            Info($"{updatePath}->清理 *.temp 文件...");
             DelTmpFile(updatePath);
-            Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->重命名目标文件...");
+            Info($"{serviceName}->重命名目标文件...");
             List<string> dllNames = GetZipNames(zipFile);
             if (dllNames.Count == 0) return;
             foreach (string dllName in dllNames)
@@ -170,7 +170,7 @@ namespace Yu.DotnetUpdater
         public static void DeleteOldBak(string serviceBak)
         {
             if (!Directory.Exists(serviceBak)) return;
-            Info($"[{DateTime.Now:HH:mm:ss.fff}]删除旧备份[{serviceBak}]");
+            Info($"删除旧备份[{serviceBak}]");
             var folders = Directory.GetDirectories(serviceBak).OrderBy(f => f).ToList();
             if (folders.Count <= 3) return;
 
@@ -215,7 +215,7 @@ namespace Yu.DotnetUpdater
             }
             catch (Exception ex)
             {
-                WriteRed($"[{DateTime.Now:HH:mm:ss.fff}][{nameof(CopyChildFolderFile)}]{ex.Message}");
+                WriteRed($"[{nameof(CopyChildFolderFile)}]{ex.Message}");
             }
         }
         #endregion
@@ -258,7 +258,7 @@ namespace Yu.DotnetUpdater
             }
             catch (Exception ex)
             {
-                WriteRed($"[{DateTime.Now:HH:mm:ss.fff}][{nameof(CopyFolderFile)}]{ex.Message}");
+                WriteRed($"[{nameof(CopyFolderFile)}]{ex.Message}");
             }
         }
         #endregion
@@ -277,45 +277,45 @@ namespace Yu.DotnetUpdater
         /// <summary>
         /// 重载nginx配置 有待更新.conf文件则直接覆盖 无则只改端口
         /// </summary>
-        protected static bool ReloadNginxConf(int oldPort, int newPort, UpdateServiceConf service)
+        protected static bool ReloadNginxConf(int[] oldPorts, int[] newPorts, UpdateServiceConf service)
         {
             string oldNginxConf = Path.Combine(Configuration["NginxConfPath"] + string.Empty, service.NginxConf);
             string confName = Path.GetFileName(oldNginxConf);
             string newNginxConf = Path.Combine(ToolRunPath, "nginx", confName);
             if (File.Exists(newNginxConf))
             {
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->Nginx配置转移中...");
+                Info($"{service.ServiceName}->Nginx配置转移中...");
                 File.Copy(newNginxConf, oldNginxConf, true);
             }
             else
             {
-                if (oldPort < 1 || newPort < 100)
+                if (oldPorts.Length < 1 || !oldPorts.Any(p => p > 0) || newPorts.Length < 1 || !newPorts.Any(p => p > 0))
                 {
-                    WriteYellow($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->端口不正确: {oldPort}->{newPort}");
+                    WriteYellow($"{service.ServiceName}->端口不正确: [{string.Join(',',oldPorts)}]->[{string.Join(',', newPorts)}]");
                     return false;
                 }
-                UpdateNginxConf(oldNginxConf, oldPort, newPort, service.ServiceName, true);
+                UpdateNginxConf(oldNginxConf, oldPorts, newPorts, service.ServiceName, true);
             }
             try
             {
                 if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
                 {
-                    //Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->Nginx配置重载中：nginx -s reload...");
+                    //Info($"{service.ServiceName}->Nginx配置重载中：nginx -s reload...");
                     //StartProcess(Path.Combine(oldNginxConf.Split("conf")[0], "nginx.exe"), "-s reload", false);
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->Nginx配置重载中[Windows psexec.exe]...");
+                    Info($"{service.ServiceName}->Nginx配置重载中[Windows psexec.exe]...");
                     ////https://www.cnblogs.com/yylyhl/p/17434404.html
                     StartProcess("\"C:\\Program Files\\PSTools\\psexec.exe\"", "-s \"C:\\Program Files\\nginx\\nginx.exe\" -p \"C:\\Program Files\\nginx\" -s reload", false);
                     return true;
                 }
                 else
                 {
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->Nginx配置重载中：nginx -s reload...");
+                    Info($"{service.ServiceName}->Nginx配置重载中：nginx -s reload...");
                     StartProcess("nginx", "-s reload", false);
                 }
             }
             catch (Exception ex)
             {
-                WriteRed($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->Nginx配置重载失败", ex);
+                WriteRed($"{service.ServiceName}->Nginx配置重载失败", ex);
                 return false;
             }
             return true;
@@ -325,32 +325,42 @@ namespace Yu.DotnetUpdater
         /// 更新 nginx/conf/conf.d/site.conf
         /// </summary>
         /// <param name="oldNginxConf">配置文件</param>
-        /// <param name="oldPort">旧端口</param>
-        /// <param name="newPort">新端口</param>
+        /// <param name="oldPorts">旧端口</param>
+        /// <param name="newPorts">新端口</param>
         /// <param name="service">服务</param>
         /// <param name="switchBackup">是否切换主备方式，否则更改端口方式</param>
-        protected static void UpdateNginxConf(string oldNginxConf, int oldPort, int newPort, string service, bool switchBackup)
+        protected static void UpdateNginxConf(string oldNginxConf, int[] oldPorts, int[] newPorts, string service, bool switchBackup)
         {
-            Info($"[{DateTime.Now:HH:mm:ss.fff}]{service}->Nginx{(switchBackup ? "主备切换" : "端口修改")}({oldPort}->{newPort})：{oldNginxConf}");
+            Info($"{service}->Nginx{(switchBackup ? "主备切换" : "端口修改")}([{string.Join(',', oldPorts)}]->[{string.Join(',', newPorts)}])：{oldNginxConf}");
             var text = File.ReadAllText(oldNginxConf, Encoding.UTF8);
             if (switchBackup)
             {
-                if (text.Contains($":{newPort} backup;"))
+                for (var p = 0; p < newPorts.Length; p++)
                 {
-                    //主备切换-再次
-                    text = text.Replace($":{newPort} backup;", $":{newPort};");
-                    text = text.Replace($":{oldPort};", $":{oldPort} backup;");
-                }
-                else
-                {
-                    //主备切换-初次
-                    var host = "server 127.0.0.1";
-                    text = text.Replace($"{host}:{oldPort};", $"{host}:{newPort};\r\n{host}:{oldPort} backup;");
+                    var newPort = newPorts[p];
+                    var oldPort = oldPorts[p];
+                    if (text.Contains($":{newPort} backup;"))
+                    {
+                        //主备切换-再次
+                        text = text.Replace($":{newPort} backup;", $":{newPort};");
+                        text = text.Replace($":{oldPort};", $":{oldPort} backup;");
+                    }
+                    else
+                    {
+                        //主备切换-初次
+                        var host = "server 127.0.0.1";
+                        text = text.Replace($"{host}:{oldPort};", $"{host}:{newPort};\r\n{host}:{oldPort} backup;");
+                    }
                 }
             }
             else
             {
-                text = text.Replace($":{oldPort}", $":{newPort}");
+                for (var p = 0; p < newPorts.Length; p++)
+                {
+                    var newPort = newPorts[p];
+                    var oldPort = oldPorts[p];
+                    text = text.Replace($":{oldPort}", $":{newPort}");
+                }
             }
             //生成不带bom的utf8文件//https://learn.microsoft.com/zh-cn/dotnet/api/system.text.utf8encoding?view=net-6.0
             File.WriteAllText(oldNginxConf, text, new UTF8Encoding(false));

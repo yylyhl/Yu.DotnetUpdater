@@ -1,5 +1,8 @@
 ﻿using System.Diagnostics;
+using System.IO;
 using System.IO.Compression;
+using System.Linq;
+using System.ServiceProcess;
 using System.Text;
 
 namespace Yu.DotnetUpdater
@@ -8,21 +11,15 @@ namespace Yu.DotnetUpdater
     /// 部署至Linux/Nginx
     /// </summary>
     /// <remarks>
-    /// 更新配置文件-->检测更新文包-->备份项目原文件-->根据项目类型执行更新：<br/>
-    /// Nginx(冷更新)：更新文件-->取旧进程id-->kill旧进程&&启动进程<br/>
-    /// Nginx(冷更新)：更新文件-->取旧进程端口id-->用新端口启动进程-->更新nginx代理配置-->删除旧进程<br/>
-    /// Nginx(热更新)：更新文件-->取旧进程端口id-->用新端口启动进程-->调转nginx代理主备配置-->删除旧进程<br/>
-    /// <br/>
-    /// Daemon(冷更新)：更新文件-->取旧进程pid-->kill旧进程&&启动进程br/>
-    /// Daemon(热更新)：更新文件-->取旧进程pid-->启动新进程-->关闭旧进程
-    /// br/>br/>
-    /// kill -15
-    /// 2.   SIGNIT  (Ctrl+C)
-    /// 3.   SIGQUIT （退出）
-    /// 9.   SIGKILL(强制终止）【不能让程序捕获到】
-    /// 15. SIGTERM （终止）
+    /// <br/>kill 2:  SIGNIT  (Ctrl+C)
+    /// <br/>kill 3:  SIGQUIT （退出）
+    /// <br/>kill 9:  SIGKILL(强制终止）【不能让程序捕获到】
+    /// <br/>kill 15: SIGTERM （终止）
     /// </remarks>
     [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    //[System.Runtime.Versioning.SupportedOSPlatform("maccatalyst")]
+    //[System.Runtime.Versioning.SupportedOSPlatform("tvos")]
+    //[System.Runtime.Versioning.SupportedOSPlatform("ios")]
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public class DeployLinux : Util
     {
@@ -39,68 +36,34 @@ namespace Yu.DotnetUpdater
                 if (i > 0) Info(string.Empty);
 
                 #region 查找待更新文件
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].UpdatePack}->查找待更新文件...");
+                Info($"{services[i].UpdatePack}->查找待更新文件...");
                 string zipFile = Path.Combine(ToolRunPath, services[i].UpdatePack);
                 if (!File.Exists(zipFile))
                 {
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].UpdatePack}->未找到待更新压缩包 : {zipFile}");
+                    Info($"{services[i].UpdatePack}->未找到待更新压缩包 : {zipFile}");
                     continue;
                 }
                 #endregion
                 var updatePath = Path.Combine(deployPath, services[i].Path);
+                CreateFolder(updatePath);
                 #region 备份原文件
                 if (UpdateServiceConf.BakDirectoryNameDemo.Contains(services[i].BakDirectoryFormat))
                 {
                     string bakPathBase = Path.Combine(deployPath, "bak");
                     string pathBak = Path.Combine(bakPathBase, DateTime.Now.ToString(services[i].BakDirectoryFormat));
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].ServiceName}->备份原文件...");
-                    //CreateFolder(updatePath);
-                    //CopyFolderFile(updatePath, pathBak, true, "logs", "log");
+                    Info($"{services[i].ServiceName}->备份原文件...");
+                    CopyFolderFile(updatePath, pathBak, true, "logs", "log");
                     StartProcess("mkdir", $"{pathBak} -p", true);
                     StartProcess("cp", $"-r {updatePath} {pathBak}", true);
 
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].ServiceName}->....................................");
+                    Info($"{services[i].ServiceName}->....................................");
                     DeleteOldBak(bakPathBase);
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].ServiceName}->备份原文件完成.");
+                    Info($"{services[i].ServiceName}->备份原文件完成.");
                 }
                 #endregion
                 var updateMode = (UpdateMode)services[i].UpdateMode;
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]更新模式：{updateMode}");
-                Update(updateMode, services[i], zipFile, updatePath);
-                //if (services[i].Ports.Any(p => p > 0))
-                //{
-                //    WebUpdate(services[i], zipFile, updatePath, updateMode);
-                //}
-                //else
-                //{
-                //    DaemonUpdate(services[i].ServiceName, zipFile, updatePath, updateMode);
-                //}
-                #region 设置开机启动
-                if (string.IsNullOrWhiteSpace(services[i].SystemdService))
-                {
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].ServiceName}->设置开机启动...");
-                    var systemdServiceFile = Path.Combine("usr/lib/systemd/system", services[i].SystemdService);
-                    if (File.Exists(systemdServiceFile))
-                    {
-                        StartProcess("systemctl", $"enable {services[i].SystemdService}", true);
-                        Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].ServiceName}->设置开机启动完成");
-                    }
-                    else
-                    {
-                        var systemdServiceFile2 = Path.Combine(updatePath, services[i].ServiceName, services[i].SystemdService);
-                        if (File.Exists(systemdServiceFile2))
-                        {
-                            File.Copy(systemdServiceFile2, systemdServiceFile, true);
-                            StartProcess("systemctl", $"enable {services[i].SystemdService}", true);
-                            Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].ServiceName}->设置开机启动完成");
-                        }
-                        else
-                        {
-                            Info($"[{DateTime.Now:HH:mm:ss.fff}]{services[i].ServiceName}->开机启动文件不存在：{systemdServiceFile}");
-                        }
-                    }
-                }
-                #endregion
+                Info($"更新模式：{updateMode}");
+                UpdateService(updateMode, services[i], zipFile, deployPath, updatePath);
                 stopwatch.Stop();
                 Info($"[{services[i].UpdatePack}]更新耗时:{stopwatch.ElapsedMilliseconds}ms");
                 Thread.Sleep(1000);
@@ -108,71 +71,63 @@ namespace Yu.DotnetUpdater
         }
         #endregion
 
-        #region Update
-        //已启动的服务：systemctl list-unit-files|grep enabled
+        #region 服务更新
         /// <summary>
-        /// 进程更新
+        /// 服务更新
         /// </summary>
-        private static void Update(UpdateMode mode, UpdateServiceConf service, string zipFile, string updatePath, int reTry = 1)
+        /// <remarks>
+        /// <br/>冷更新：直接按名称查找实例进程id，关闭旧实例进程+启动新实例进程；
+        /// <br/>热更新：判断新旧实例，启动新实例进程+关闭旧实例进程；
+        /// <br/>--------默认更新启用旧实例；
+        /// <br/>--------使用nginx则按端口查进程id，通过[nginx主备代理]判断；
+        /// <br/>--------不用nginx则按名称查进程id，通过[运行状态+运行时长]判断；
+        /// </remarks>
+        private static void UpdateService(UpdateMode mode, UpdateServiceConf service, string zipFile, string deployPath, string updatePath, int reTry = 1)
         {
             if (reTry < 1) return;
             var stopwatch = new Stopwatch();
             try
             {
                 stopwatch.Start();
-                /*
-                 冷更新：关闭原进程+启动新进程
-
-                 热更新：启动新进程+关闭原进程（视情况）
-                 */
-                var oldPid = GetPidFromPs($"{service.ServiceName}.dll");
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->原进程pid[{oldPid}]");
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->解压Zip文件中...");
-                ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
 
                 if (mode == UpdateMode.Cold)
                 {
-                    #region 关闭原进程+启动新进程
-                    //string oneCmd = $"cd {updatePath} && nohup dotnet {serviceName}.dll &";
-                    //if (!string.IsNullOrWhiteSpace(oldPid))
-                    //{
-                    //    oneCmd = $"kill -15 {oldPid} && {oneCmd}";
-                    //}
-                    //Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->关闭原进程+启动新进程：{oneCmd}");
-                    //StartProcess(oneCmd, string.Empty, false);
-                    //Thread.Sleep(3000);
-                    //StartProcess("kill", $"-9 {oldPid}", false);
-                    #endregion
-                    if (!string.IsNullOrWhiteSpace(oldPid))
-                    {
-                        Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->关闭原进程[{oldPid}]...");
-                        StartProcess("kill", $"-15 {oldPid}", false);
-                        Thread.Sleep(3000);
-                        StartProcess("kill", $"-9 {oldPid}", false);
-                    }
-                    string dotnetArg = Path.Combine(updatePath, $"{service.ServiceName}.dll &");
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->启动新进程：dotnet {dotnetArg}");
-                    StartProcess("dotnet", dotnetArg, false);
+                    ColdUpdate(service, zipFile, updatePath);
                 }
                 else
                 {
-                    string dotnetArg = Path.Combine(updatePath, $"{service.ServiceName}.dll &");
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->启动新进程：dotnet {dotnetArg}");
-                    StartProcess("dotnet", dotnetArg, false);
-                    if (!string.IsNullOrWhiteSpace(oldPid))
+                    HotUpdate(mode, service, zipFile, deployPath, updatePath);
+                }
+                Info($"{service.ServiceName}->更新完成");
+                #region 设置开机启动
+                if (!string.IsNullOrWhiteSpace(service.SystemdService))
+                {
+                    var systemdServiceFile = Path.Combine("usr/lib/systemd/system", service.SystemdService);
+                    if (File.Exists(systemdServiceFile))
                     {
-                        Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->关闭原进程[{oldPid}]...");
-                        StartProcess("kill", $"-15 {oldPid}", false);
-                        Thread.Sleep(3000);
-                        StartProcess("kill", $"-9 {oldPid}", false);
+                        UpdateBootstrap(service, systemdServiceFile, true);
+                    }
+                    else
+                    {
+                        var systemdServiceFile2 = Path.Combine(updatePath, service.ServiceName, service.SystemdService);
+                        Info($"->设置开机启动0[{systemdServiceFile2}]...");
+                        if (File.Exists(systemdServiceFile2))
+                        {
+                            File.Copy(systemdServiceFile2, systemdServiceFile, true);
+                            UpdateBootstrap(service, systemdServiceFile, true);
+                        }
+                        else
+                        {
+                            Info($"{service.ServiceName}->开机启动文件不存在：{systemdServiceFile}");
+                        }
                     }
                 }
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->任务完成");
+                #endregion
             }
             catch (Exception ex)
             {
-                WriteRed($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->[{nameof(DaemonUpdate)}]{ex}");
-                //Update(service.ServiceName, zipFile, updatePath, mode, reTry - 1);
+                WriteRed($"{service.ServiceName}->[{nameof(UpdateService)}]{ex}");
+                UpdateService(mode, service, zipFile, deployPath, updatePath, reTry - 1);
             }
             finally
             {
@@ -181,236 +136,282 @@ namespace Yu.DotnetUpdater
             }
         }
         #endregion
-
-        #region Update Daemon
-        /// <summary>
-        /// 守护进程更新
-        /// </summary>
-        private static void DaemonUpdate(string serviceName, string zipFile, string updatePath, UpdateMode mode, int reTry = 1)
+        #region 设置开机启动
+        private static void UpdateBootstrap(UpdateServiceConf service, string systemdServiceFile, bool enable)
         {
-            if (reTry < 1) return;
-            var stopwatch = new Stopwatch();
-            try
-            {
-                stopwatch.Start();
-                var oldPid = GetPidFromPs($"{serviceName}.dll");
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->原进程pid[{oldPid}]");
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->解压Zip文件中...");
-                ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
-
-                if (mode == UpdateMode.Cold)
-                {
-                    #region 关闭原进程+启动新进程
-                    //string oneCmd = $"cd {updatePath} && nohup dotnet {serviceName}.dll &";
-                    //if (!string.IsNullOrWhiteSpace(oldPid))
-                    //{
-                    //    oneCmd = $"kill -15 {oldPid} && {oneCmd}";
-                    //}
-                    //Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->关闭原进程+启动新进程：{oneCmd}");
-                    //StartProcess(oneCmd, string.Empty, false);
-                    //Thread.Sleep(3000);
-                    //StartProcess("kill", $"-9 {oldPid}", false);
-                    #endregion
-                    if (!string.IsNullOrWhiteSpace(oldPid))
-                    {
-                        Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->关闭原进程[{oldPid}]...");
-                        StartProcess("kill", $"-15 {oldPid}", false);
-                    }
-                    string dotnetArg = Path.Combine(updatePath, $"{serviceName}.dll &");
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->启动新进程：dotnet {dotnetArg}");
-                    StartProcess("dotnet", dotnetArg, false);
-                    Thread.Sleep(3000);
-                    StartProcess("kill", $"-9 {oldPid}", false);
-                }
-                else
-                {
-                    string dotnetArg = Path.Combine(updatePath, $"{serviceName}.dll &");
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->启动新进程：dotnet {dotnetArg}");
-                    StartProcess("dotnet", dotnetArg, false);
-                    if (!string.IsNullOrWhiteSpace(oldPid))
-                    {
-                        Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->关闭原进程[{oldPid}]...");
-                        StartProcess("kill", $"-15 {oldPid}", false);
-                        Thread.Sleep(3000);
-                        StartProcess("kill", $"-9 {oldPid}", false);
-                    }
-                }
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->任务完成");
-            }
-            catch (Exception ex)
-            {
-                WriteRed($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->[{nameof(DaemonUpdate)}]{ex}");
-                DaemonUpdate(serviceName, zipFile, updatePath, mode, reTry - 1);
-            }
-            finally
-            {
-                stopwatch.Stop();
-                Info($"[{serviceName}]本次更新耗时:{stopwatch.ElapsedMilliseconds}ms");
-            }
+            Info($"->{(enable ? "设置" : "禁止")}开机启动[{systemdServiceFile}]...");
+            StartProcess("systemctl", $"{(enable ? "enable" : "disable")} {service.SystemdService}", true);
+            Info($"{service.ServiceName}->{(enable ? "设置" : "禁止")}开机启动完成");
         }
         #endregion
-
-        #region Update Web
-        /// <summary>
-        /// Update Web
-        /// </summary>
-        private static void WebUpdate(UpdateServiceConf service, string zipFile, string updatePath, UpdateMode mode, int retryNum = 0)
+        #region 热更新：启动新实例进程+关闭旧实例进程
+        private class UpdateSet
         {
-            var stopwatch = new Stopwatch();
-            try
+            public string CurPid { get; set; }
+            public string CurPath { get; set; }
+            public string NewPid { get; set; }
+            public string NewPath { get; set; }
+            public bool UpdateBak { get; set; }
+        }
+        private static void HotUpdate(UpdateMode mode, UpdateServiceConf service, string zipFile, string deployPath, string updatePath)
+        {
+            string curPid = string.Empty;
+            var curPath = updatePath;
+            var curPorts = service.Ports;
+            string newPid = string.Empty;
+            var newPath = updatePath + (mode == UpdateMode.Hot2 ? "2" : null);
+            var newPorts = service.BakPorts;
+            //有端口：根据端口判断新旧，根据端口确定主备，主备（若有）文件都更新
+            //无端口：根据id可判断新旧，单目录模式无法确定主备，主备（若有）文件都更新
+            if (!string.IsNullOrWhiteSpace(service.NginxConf))
             {
-                stopwatch.Start();
-
-                var pid = GetPidFromPs($"{service.ServiceName}.dll");
-                var portOld = GetPortByPid(pid);
-                if (mode == UpdateMode.Cold)
+                #region 判断主备实例-有端口：通过[nginx主备代理]判断
+                //进程的nginx配置提前配好
+                string oldNginxConf = Path.Combine(Configuration["NginxConfPath"] + string.Empty, service.NginxConf);
+                var text = File.ReadAllText(oldNginxConf, Encoding.UTF8);
+                var bakKeys = service.BakPorts.Select(p => $":{p} backup;").ToList();
+                if (bakKeys.Any(k => text.Contains(k)))
                 {
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->关闭旧应用程序[pid:{pid},port:{portOld}]中...");
-                    StartProcess("kill", $"-15 {pid}", false);
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->[{retryNum}]解压Zip文件中...");
-                    ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
-                    StartByNewPort(portOld, service.ServiceName, updatePath);
-                    Thread.Sleep(3000);
-                    StartProcess("kill", "-9 " + pid, false);
+                    foreach (var port in service.Ports)
+                    {
+                        curPid = GetPidByPort(port);
+                        if (!string.IsNullOrWhiteSpace(curPid)) break;
+                    }
+                    curPorts = service.Ports;
+                    foreach (var port in service.BakPorts)
+                    {
+                        newPid = GetPidByPort(port);
+                        if (!string.IsNullOrWhiteSpace(newPid)) break;
+                    }
+                    newPorts = service.BakPorts;
+                    Info($"->当前为主实例，启用备用实例[{string.Join(",", curPorts)}]->[{string.Join(",", newPorts)}]...");
                 }
                 else
                 {
-                    _ = int.TryParse(Configuration[$"{service.ServiceName}:Port"], out var portBase);
-                    var portNew = portOld == portBase ? portBase + 100 : portBase;//判断当前占用端口，自动更换端口
-                    if (retryNum > 0)
+                    foreach (var port in service.BakPorts)
                     {
-                        Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->更新执行：重命名中...");
-                        RenameTargetFile(zipFile, updatePath, service.ServiceName);
+                        curPid = GetPidByPort(port);
+                        if (!string.IsNullOrWhiteSpace(curPid)) break;
                     }
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->[{retryNum}]解压Zip文件中...");
-                    ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
-
-                    StartByNewPort(portNew, service.ServiceName, updatePath);
-                    if (!ReloadNginxConf(portOld, portNew, service))
+                    curPorts = service.BakPorts;
+                    curPath = updatePath + (mode == UpdateMode.Hot2 ? "2" : null);
+                    foreach (var port in service.Ports)
                     {
-                        Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->升级中止");
-                        return;
+                        newPid = GetPidByPort(port);
+                        if (!string.IsNullOrWhiteSpace(newPid)) break;
+                    }
+                    newPath = updatePath;
+                    newPorts = service.Ports;
+                    Info($"->当前为备用实例，启用主实例[{string.Join(",", curPorts)}]->[{string.Join(",", newPorts)}]...");
+                }
+                #region MyRegion
+                //var mainKeys = service.Ports.Select(p => $":{p} backup;").ToList();
+                //foreach (var line in text.ToString().Split("\n"))
+                //{
+                //    if (bakKeys.Any(k => text.Contains(k)))
+                //    {
+                //        curPid = GetPidByPort(service.Ports[0]);
+                //        curPorts = service.Ports;
+                //        curPath = updatePath + (mode == UpdateMode.Hot2 ? "2" : null);
+                //        newPid = GetPidByPort(service.BakPorts[0]);
+                //        newPath = updatePath;
+                //        newPorts = service.BakPorts;
+                //        Info($"->当前为主实例，启用备用实例[{string.Join(",", curPorts)}]->[{string.Join(",", newPorts)}]...");
+                //        break;
+                //    }
+                //    else if (mainKeys.Any(k => text.Contains(k)))
+                //    {
+                //        curPid = GetPidByPort(service.BakPorts[0]);
+                //        curPorts = service.BakPorts;
+                //        newPid = GetPidByPort(service.Ports[0]);
+                //        newPorts = service.Ports;
+                //        Info($"->nginx-当前为备用实例，启用主实例[{string.Join(",", curPorts)}]->[{string.Join(",", newPorts)}]...");
+                //        break;
+                //    }
+                //}
+                #endregion
+                #endregion
+            }
+            else
+            {
+                #region 判断主备实例-无端口：按名称查找，通过[运行状态+运行时长]判断
+                var pids = GetPidsFromPs($"{service.ServiceName}.dll");
+                Info($"->当前实例ids[{string.Join(",", pids)}]...");
+                if (pids.Count > 1)
+                {
+                    var firstPid = pids.FirstOrDefault()!;
+                    var lastPid = pids.LastOrDefault()!;
+                    var firstSeconds = ElapsedSeconds(firstPid);
+                    var lastSeconds = ElapsedSeconds(lastPid);
+                    if (firstSeconds < lastSeconds)
+                    {
+                        curPid = firstPid;
+                        curPath = ProcessFileDirectory(firstPid, service.ServiceName);
+                        newPid = lastPid;
+                        if (mode == UpdateMode.Hot2)
+                        {
+                            newPath = GetNewPath(curPath);
+                        }
+                        else
+                        {
+                            newPath = ProcessFileDirectory(firstPid, service.ServiceName);
+                        }
+                        Info($"->实例切换[{curPid},{curPath}]-->[{newPid},{newPath}]...");
+                    }
+                    else
+                    {
+                        curPid = lastPid;
+                        curPath = ProcessFileDirectory(lastPid, service.ServiceName);
+                        newPid = firstPid;
+                        if (mode == UpdateMode.Hot2)
+                        {
+                            newPath = GetNewPath(curPath);
+                        }
+                        else
+                        {
+                            newPath = ProcessFileDirectory(firstPid, service.ServiceName);
+                        }
+                        Info($"->实例切换[{curPid},{curPath}]-->[{newPid},{newPath}]...");
                     }
                 }
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->升级完成");
-
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->等待原应用程序处理完旧逻辑...");
-                Thread.Sleep(3000);
-                KillByPort(portOld, service.ServiceName);
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->旧进程处理完成");
-            }
-            catch (Exception ex)
-            {
-                if (retryNum == 0 && ex.Message.Contains("used by another"))
+                else if (pids.Count == 1)
                 {
-                    WebUpdate(service, zipFile, updatePath, mode, retryNum + 1);
+                    curPid = pids.FirstOrDefault()!;
+                    curPath = ProcessFileDirectory(curPid, service.ServiceName);
+                    newPath = GetNewPath(curPath);
+                    Info($"->当前实例[{curPid},{curPath}]...");
                 }
-                else
-                {
-                    WriteRed($"[{DateTime.Now:HH:mm:ss.fff}]{service.ServiceName}->[{nameof(WebUpdate)}]{ex}");
-                }
+                #endregion
             }
-            finally
+            if (!string.IsNullOrWhiteSpace(newPid))
             {
-                stopwatch.Stop();
-                Info($"[{service.ServiceName}]耗时:{stopwatch.ElapsedMilliseconds}ms");
-                DelTmpFile(updatePath);
+                Info($"->关掉待更新进程[{newPid}]...");
+                StartProcess("kill", $"-9 {newPid}", false);
             }
+            if (string.IsNullOrWhiteSpace(curPath))
+            {
+                WriteYellow($"->当前实例文件路径为空！");
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(newPath))
+            {
+                WriteYellow($"->待更新路径为空！");
+                return;
+            }
+            Info($"->解压Zip文件中-旧[{curPath}]...");//双目录模式：主备实例文件都更新，避免开机自启后有旧逻辑影响
+            ZipFile.ExtractToDirectory(zipFile, curPath, Encoding.UTF8, true);
+            if (mode == UpdateMode.Hot2)
+            {
+                CreateFolder(newPath);
+                Info($"->解压Zip文件中-新[{newPid},{newPath}]...");
+                ZipFile.ExtractToDirectory(zipFile, newPath, Encoding.UTF8, true);
+                if (service.KillOldWaitSeconds > 0)
+                {
+                    var serviceFile = service.SystemdService;
+                    if (newPath.EndsWith("2")) serviceFile = $"{service.ServiceName.ToLower()}2.service";
+                    var systemdServiceFile = Path.Combine("usr/lib/systemd/system", serviceFile);
+                    UpdateBootstrap(service, systemdServiceFile, false);//双目录模式：禁止开机自启，避免启动后有逻辑影响
+                }
+            }
+            var dotnetArg = BuildArgs(newPath, service.ServiceName, newPorts);
+            Info($"{service.ServiceName}->启动新进程：dotnet {dotnetArg}");
+            StartProcess("dotnet", dotnetArg, false);
+            if (!string.IsNullOrWhiteSpace(service.NginxConf))
+            {
+                Thread.Sleep(5000);
+                ReloadNginxConf(curPorts, newPorts, service);
+            }
+            #region 停止并删除旧服务及文件
+            if (service.KillOldWaitSeconds > 0)
+            {
+                if (mode == UpdateMode.Hot2)
+                {
+                    var serviceFile = service.SystemdService;
+                    if (newPath.EndsWith("2")) serviceFile = $"{service.ServiceName.ToLower()}2.service";
+                    var systemdServiceFile = Path.Combine("usr/lib/systemd/system", serviceFile);
+                    UpdateBootstrap(service, systemdServiceFile, false);//双目录模式：禁止开机自启，避免启动后有逻辑影响
+                }
+                new Thread(delegate ()
+                {
+                    var waitSeconds = service.KillOldWaitSeconds - 1;
+                    KillProcess(curPid, service.ServiceName, waitSeconds);
+                })
+                { IsBackground = true }.Start();
+            }
+            #endregion
         }
-        private static void KillByPort(int port, string serviceName)
+        private static string GetNewPath(string curPath)
         {
-            if (port < 1) return;
-            var dotnetPid = GetPidFromLsofOutput(StartProcess("lsof", "-i:" + port, true), "dotnet");
-            if (!string.IsNullOrWhiteSpace(dotnetPid))
+            string newPath;
+            if (curPath.EndsWith("2"))
             {
-                Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->关闭旧应用程序[pid:{dotnetPid},port:{port}]中...");
-                StartProcess("kill", $"-15 {dotnetPid}", false);
-                Thread.Sleep(3000);
-                StartProcess("kill", $"-9 {dotnetPid}", false);
+                newPath = curPath.Replace("2", null);
             }
+            else
+            {
+                newPath = curPath + "2";
+            }
+            return newPath;
         }
-        /// <summary>
-        /// 使用新端口启动程序
-        /// </summary>
-        private static void StartByNewPort(int port, string serviceName, string updatePath)
+        #endregion
+        #region 冷更新：关闭旧实例进程+启动新实例进程
+        private static void ColdUpdate(UpdateServiceConf service, string zipFile, string updatePath)
         {
-            if (port > 100)
-            {
-                var dotnetPid = GetPidFromLsofOutput(StartProcess("lsof", "-i:" + port, true), "dotnet");
-                if (!string.IsNullOrWhiteSpace(dotnetPid))
-                {
-                    Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->端口{port}已启动该程序.");
-                    return;
-                }
-            }
-            string dotnetArg = $"{serviceName}.dll --urls=https://*:{port} &";
-            dotnetArg = Path.Combine(updatePath, dotnetArg);
-            Info($"[{DateTime.Now:HH:mm:ss.fff}]{serviceName}->用新端口({port})启动程序：dotnet {dotnetArg}");
+            Info($"->解压Zip文件中[{updatePath}]...");
+            ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
+            var oldPid = GetPidsFromPs($"{service.ServiceName}.dll").FirstOrDefault();//冷更新直接按名称查找
+            #region 一次性执行
+            //var oneCmd = $"cd {updatePath} && nohup dotnet {BuildArgs(updatePath, service.ServiceName, service.Ports)}";
+            //if (!string.IsNullOrWhiteSpace(oldPid))
+            //{
+            //    oneCmd = $"kill -15 {oldPid} && {oneCmd} && kill -9 {oldPid}";
+            //}
+            //Info($"{serviceName}->关闭原进程+启动新进程：{oneCmd}");
+            //StartProcess(oneCmd, string.Empty, false);
+            #endregion
+            KillProcess(service.ServiceName, oldPid, 1);
+            var dotnetArg = BuildArgs(updatePath, service.ServiceName, service.Ports);
+            Info($"{service.ServiceName}->启动新进程：dotnet {dotnetArg}");
             StartProcess("dotnet", dotnetArg, false);
         }
-        
-        /// <summary>
-        /// 获取指定pid所占端口
-        /// </summary>
-        private static int GetPortByPid(string pid)
+        #endregion
+        #region KillProcess
+        private static void KillProcess(string pid, string serviceName, int killWaitSeconds = 1)
         {
-            if (string.IsNullOrWhiteSpace(pid)) return 0;
-            var result = StartProcess("netstat", $"-nap | grep {pid}", true);
-            if (string.IsNullOrWhiteSpace(result)) return 0;
-            string line = result.Split('\n').Where(r => r.ToLower().Contains(pid + "/dotnet") && r.ToLower().Contains("listen") && r.Contains(":::")).FirstOrDefault();
-            if (string.IsNullOrWhiteSpace(line)) return 0;
-
-            string[] items = line.Split('\t', '\r', ' ').Where(a => !string.IsNullOrWhiteSpace(a)).ToArray();
-            var portPart = items[3];
-            _ = int.TryParse(portPart.Split(":")[^1], out var port);
-            return port;
+            if (killWaitSeconds > 0 && !string.IsNullOrWhiteSpace(pid))
+            {
+                Thread.Sleep(killWaitSeconds * 1000);
+                Info($"{serviceName}->关闭进程[{pid}]...");
+                StartProcess("kill", $"-15 {pid}", false);
+                Thread.Sleep(3000);
+                StartProcess("kill", $"-9 {pid}", false);
+            }
         }
         #endregion
-
-        #region 获取进程id
-        /// <summary>
-        /// 从ps -x结果按命令取出pid
-        /// </summary>
-        /// <param name="processCmd">命令关键字</param>
-        /// <returns>进程id</returns>
-        private static string GetPidFromPs(string processCmd)
+        #region BuildArgs
+        private static string BuildArgs(string updatePath, string serviceName, params int[] ports)
         {
-            string pid = string.Empty;
-            var result = StartProcess("ps", $"-x", true);
-            if (!string.IsNullOrWhiteSpace(result))
+            var dotnetArg = Path.Combine(updatePath, $"{serviceName}.dll");
+            if (ports != null)
             {
-                string line = result.Split('\n').Where(r => r.ToLower().Contains(processCmd.ToLower())).FirstOrDefault();
-                if (!string.IsNullOrWhiteSpace(line))
+                for (var p = 0; p < ports.Length; p++)
                 {
-                    string[] items = line.Split('\t', '\r', ' ').Where(a => !string.IsNullOrWhiteSpace(a)).ToArray();
-                    pid = items[0];
+                    var port = ports[p];
+                    if (port > 0)
+                    {
+                        if (p == 0)
+                        {
+                            dotnetArg += $" --urls=https://*:{port}";
+                        }
+                        else
+                        {
+                            dotnetArg += $" --p{p}={port}";
+                        }
+                    }
                 }
             }
-            return pid;
-        }
-        /// <summary>
-        /// 从lsof -i:port结果取出pid
-        /// </summary>
-        /// <param name="result">lsof -i:port结果</param>
-        /// <param name="keyword">过滤关键字</param>
-        /// <returns>进程id</returns>
-        private static string GetPidFromLsofOutput(string result, string keyword = "dotnet")
-        {
-            if (string.IsNullOrWhiteSpace(result)) return string.Empty;
-            string[] items = result.Split(' ', '\n', '\t', '\r');
-            bool chkPID = false;
-            string pid = string.Empty;
-            foreach (string item in items)
-            {
-                if (string.IsNullOrWhiteSpace(item)) continue;
-                if (item.Contains(keyword)) { chkPID = true; }
-                else if (chkPID)
-                {
-                    pid = item.Trim();
-                    break;
-                }
-            }
-            return pid;
+            dotnetArg += $" &";
+            return dotnetArg;
         }
         #endregion
 
@@ -477,6 +478,153 @@ namespace Yu.DotnetUpdater
                 dockers.Add($"{vals[0]},{vals[^1]},{imageName},{port}");
             }
             return dockers;
+        }
+        #endregion
+
+        #region 获取进程id：从 ps -x 输出结果按关键字取
+        /// <summary>
+        /// 获取进程id：从 ps -x 输出结果按关键字取出pid
+        /// </summary>
+        /// <param name="keyword">关键字</param>
+        /// <returns>进程id</returns>
+        private static List<string> GetPidsFromPs(string keyword)
+        {
+            var pids = new List<string>();
+            var result = StartProcess("ps", $"-x", true);
+            if (!string.IsNullOrWhiteSpace(result))
+            {
+                var lines = result.Split('\n').Where(r => r.ToLower().Contains(keyword.ToLower())).ToList();
+                foreach (var line in lines)
+                {
+                    if (!string.IsNullOrWhiteSpace(line))
+                    {
+                        string[] items = line.Split('\t', '\r', ' ').Where(a => !string.IsNullOrWhiteSpace(a)).ToArray();
+                        pids.Add(items[0]);
+                    }
+                }
+            }
+            return pids;
+        }
+        #endregion
+
+        #region 获取进程id：从 lsof -i:port 输出结果按关键字取
+        /// <summary>
+        /// 获取进程id：从 lsof -i:port 输出结果按关键字取
+        /// </summary>
+        /// <param name="port">端口</param>
+        /// <param name="keyword">过滤关键字</param>
+        /// <returns>进程id</returns>
+        private static string GetPidByPort(int port, string keyword = "dotnet")
+        {
+            var result = StartProcess("lsof", "-i:" + port, true);
+            if (string.IsNullOrWhiteSpace(result)) return string.Empty;
+            string[] items = result.Split(' ', '\n', '\t', '\r');
+            bool chkPID = false;
+            string pid = string.Empty;
+            foreach (string item in items)
+            {
+                if (string.IsNullOrWhiteSpace(item)) continue;
+                if (item.Contains(keyword)) { chkPID = true; }
+                else if (chkPID)
+                {
+                    pid = item.Trim();
+                    break;
+                }
+            }
+            return pid;
+        }
+        #endregion
+
+        #region 获取指定pid所占端口
+        /// <summary>
+        /// 获取指定pid所占端口
+        /// </summary>
+        private static int GetPortByPid(string pid)
+        {
+            if (string.IsNullOrWhiteSpace(pid)) return 0;
+            var result = StartProcess("netstat", $"-nap | grep {pid}", true);
+            if (string.IsNullOrWhiteSpace(result)) return 0;
+            string line = result.Split('\n').Where(r => r.ToLower().Contains(pid + "/dotnet") && r.ToLower().Contains("listen") && r.Contains(":::")).FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(line)) return 0;
+
+            string[] items = line.Split('\t', '\r', ' ').Where(a => !string.IsNullOrWhiteSpace(a)).ToArray();
+            var portPart = items[3];
+            _ = int.TryParse(portPart.Split(":")[^1], out var port);
+            return port;
+        }
+        #endregion
+
+        #region 进程的文件目录
+        /// <summary>
+        /// 进程的文件目录：ps -ax|grep keyword，ps -ef|grep keyword
+        /// </summary>
+        private static string ProcessFileDirectory(string key1, string key2)
+        {
+            //var result = StartProcess("ps", "-ax", true);//ps -ax|grep keyword
+            var result = StartProcess("/bin/bash", $"-c \"ps -ax|grep {key1}\"", true);
+            //1932 ?        Sl     0:01 dotnet /home/Deploy/ProjectName/ProjectName.dll --urls=https://*:5000 &
+            string[] keywords = new string[] { key1.ToLower(), key2.ToLower() };
+            var path = GetFileDirectory(result, keywords);
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                //result = StartProcess("ps", "-ef", true);//ps -ef|grep keyword
+                result = StartProcess("/bin/bash", $"-c \"ps -ef|grep {key1}\"", true);
+                //root        1932       1  0 09:34 ?        00:00:01 dotnet /home/Deploy/ProjectName/ProjectName.dll --urls=https://*:5000 &
+                path = GetFileDirectory(result, keywords);
+            }
+            Info($"ProcessFileDirectory[{key1},{key2}][{path}]");
+            return path!;
+        }
+        private static string GetFileDirectory(string result, string[] keywords)
+        {
+            if (string.IsNullOrWhiteSpace(result)) return string.Empty;
+            Info($"[GetFileDirectory]-->[{result}]");
+            var line = result.Split('\n').Where(t => keywords.All(t.ToLower().Contains)).FirstOrDefault() + string.Empty;
+            Info($"[GetFileDirectory][{line}]");
+            var path = line.Split('\t', '\r', ' ').Where(a => a.ToLower().Contains(keywords[1])).FirstOrDefault();
+            path = Path.GetDirectoryName(path) + string.Empty;
+            return path;
+        }
+        #endregion
+        #region 进程启动时的工作目录
+        /// <summary>
+        /// 进程启动时的工作目录：pwdx 123
+        /// </summary>
+        private static string ProcessWorkDirectory(string pid)
+        {
+            var result = StartProcess("pwdx", $"{pid}", true);
+            //4162: /home/Deploy/ProjectName
+            result = result.Replace($"{pid}:", null).Trim();
+            if (string.IsNullOrWhiteSpace(result))
+            {
+                result = StartProcess("lsof", $"-p {pid} | grep cwd", true);
+                //dotnet  4162 root  cwd       DIR              253,0     4096 295992 /home//Deploy/ProjectName
+                result = result.Substring(result.IndexOf("/"));
+            }
+            return result;
+        }
+        #endregion
+
+        #region 进程启动时间/运行时间/运行时长
+        private static TimeSpan ElapsedTimes(string pid)
+        {
+            var result = StartProcess("ps", $"-p {pid} -o etime=", true);
+            if (string.IsNullOrWhiteSpace(result)) return default;
+            _ = TimeSpan.TryParse(result, out var time);
+            return time;
+        }
+        private static long ElapsedSeconds(string pid)
+        {
+            var result = StartProcess("ps", $"-p {pid} -o etimes=", true);
+            _ = long.TryParse(result, out var seconds);
+            return seconds;
+        }
+        private static DateTime StartTime(string pid)
+        {
+            var result = StartProcess("ps", $" -p {pid} -o lstart=", true);
+            if (string.IsNullOrWhiteSpace(result)) return default;
+            _ = DateTime.TryParse(result, out var time);
+            return time;
         }
         #endregion
     }

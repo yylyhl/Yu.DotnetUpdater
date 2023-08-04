@@ -1,6 +1,4 @@
 ﻿// See https://aka.ms/new-console-template for more information
-//using System.Diagnostics;
-using System.Runtime.InteropServices;
 using Microsoft.Extensions.Configuration;
 using Yu.DotnetUpdater;
 
@@ -64,14 +62,14 @@ if (string.Compare(confim, "y", true) != 0)
     return;
 }
 
-Util.Info($">更新开始[{DateTime.Now:HH:mm:ss.fff}]...\n");
+Util.Info($">更新开始...\n");
 stopwatch.Restart();
-if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
 {
     DeployWindows.Start(vals, updateConf);
     Close(stopwatch, 10);
 }
-else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux))
 {
     DeployLinux.Start(vals, updateConf);
     Close(stopwatch, 10);
@@ -86,7 +84,7 @@ else
 static void Close(System.Diagnostics.Stopwatch stopwatch, int sec)
 {
     stopwatch.Stop();
-    Util.WriteGreen($"\n>更新结束[{DateTime.Now:HH:mm:ss.fff}]，总耗时：{stopwatch.ElapsedMilliseconds}ms");
+    Util.WriteGreen($"\n>更新结束，总耗时：{stopwatch.ElapsedMilliseconds}ms");
     if (Util.WarnOrError) Util.WriteYellow($">>>有错误或警告需关注");
     Util.Info($">{sec}秒后自动退出");
     Thread.Sleep(sec * 1000);

@@ -9,22 +9,26 @@
         Cold = 0,
 
         /// <summary>
-        /// 新旧服务有共存时间，需避免业务有冲突/并发问题：<br/>
+        /// 热更新：需支持多实例运行，单目录；
         /// <br/>
-        /// IIS-热更新：原文件重命名-->更新文件-->回收应用程序池-->清理重命名的文件<br/>
         /// <br/>
-        /// Service/Nginx-热更新(双实例服务+双目录，有同目录文件干扰，有端口监听的提前改好配置)：
-        /// 清理重命名的文件-->解压更新（至备份服务目录）-->启动备份服务-->更新重载nginx设置（若用nginx）-->停止原服务（视情况）<br/>
+        /// IIS：重叠回收方式（disallowOverlappingRotation=false），
+        /// <br/>原文件重命名-->更新文件-->回收应用程序池-->清理重命名的文件
+        /// <br/>
+        /// <br/>
+        /// Service/Nginx：监听端口放在命令参数里(若有)，
+        /// <br/>原文件重命名-->解压更新-->启动新实例-->重载nginx设置（若用）-->停止原服务（视情况）
         /// </summary>
-        Hot = 2,
+        Hot = 1,
+
         /// <summary>
-        /// 新旧服务有共存时间，需避免业务有冲突/并发问题：<br/>
+        /// 热更新：需支持多实例运行，双目录；
         /// <br/>
-        /// Service/Nginx-热更新(双实例服务+单目录，无同目录文件干扰，不适用有端口监听的)：
-        /// 清理重命名的文件-->原文件重命名-->解压更新-->启动备份服务-->更新重载nginx设置（若用nginx）-->停止原服务（视情况）<br/>
         /// <br/>
+        /// Service/Nginx：监听端口放在配置文件里(若有)，
+        /// <br/>停止实例B(若有)-->解压更新（至待启用实例B目录）-->启动实例B-->重载nginx配置（若用）-->停止实例A（视情况）
         /// </summary>
-        Hot2 = 3
+        Hot2 = 2
     }
     public class UpdateServiceConf
     {
@@ -37,9 +41,12 @@
         /// </summary>
         public string BakDirectoryFormat { get; set; }
         /// <summary>
-        /// 端口，0则为系统服务，大于0则为web服务；
+        /// 监听端口，0则为系统服务，大于0则为web服务（主线程监听端口, 子线程监听端口）；
         /// </summary>
         public int[] Ports { get; set; }
+        /// <summary>
+        /// 备用实例监听端口，用于热更新，说明参考Ports
+        /// </summary>
         public int[] BakPorts { get; set; }
         /// <summary>
         /// 更新目标目录，DeployPath下面；
