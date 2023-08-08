@@ -1,8 +1,5 @@
 ﻿using System.Diagnostics;
-using System.IO;
 using System.IO.Compression;
-using System.Linq;
-using System.ServiceProcess;
 using System.Text;
 
 namespace Yu.DotnetUpdater
@@ -23,6 +20,7 @@ namespace Yu.DotnetUpdater
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public class DeployLinux : Util
     {
+        private static string SystemdPath => "/usr/lib/systemd/system";
         #region StartForLinux
         public static void Start(int[] updateIndexs, UpdateServiceConf[] services)
         {
@@ -89,7 +87,7 @@ namespace Yu.DotnetUpdater
             try
             {
                 stopwatch.Start();
-
+                
                 if (mode == UpdateMode.Cold)
                 {
                     ColdUpdate(service, zipFile, updatePath);
@@ -102,7 +100,7 @@ namespace Yu.DotnetUpdater
                 #region 设置开机启动
                 if (!string.IsNullOrWhiteSpace(service.SystemdService))
                 {
-                    var systemdServiceFile = Path.Combine("usr/lib/systemd/system", service.SystemdService);
+                    var systemdServiceFile = Path.Combine(SystemdPath, service.SystemdService);
                     if (File.Exists(systemdServiceFile))
                     {
                         UpdateBootstrap(service, systemdServiceFile, true);
@@ -110,7 +108,7 @@ namespace Yu.DotnetUpdater
                     else
                     {
                         var systemdServiceFile2 = Path.Combine(updatePath, service.ServiceName, service.SystemdService);
-                        Info($"->设置开机启动0[{systemdServiceFile2}]...");
+                        Info($"->开机启动文件[{systemdServiceFile2}]...");
                         if (File.Exists(systemdServiceFile2))
                         {
                             File.Copy(systemdServiceFile2, systemdServiceFile, true);
@@ -118,7 +116,7 @@ namespace Yu.DotnetUpdater
                         }
                         else
                         {
-                            Info($"{service.ServiceName}->开机启动文件不存在：{systemdServiceFile}");
+                            WriteYellow($"{service.ServiceName}->开机启动文件不存在：{systemdServiceFile}");
                         }
                     }
                 }
@@ -139,20 +137,17 @@ namespace Yu.DotnetUpdater
         #region 设置开机启动
         private static void UpdateBootstrap(UpdateServiceConf service, string systemdServiceFile, bool enable)
         {
-            Info($"->{(enable ? "设置" : "禁止")}开机启动[{systemdServiceFile}]...");
+            if (!enable && !File.Exists(systemdServiceFile))
+            {
+                Info($"{service.ServiceName}->开机启动文件不存在：{systemdServiceFile}");
+                return;
+            }
+            Info($"->{(enable ? "启用" : "禁止")}开机启动[{systemdServiceFile}]...");
             StartProcess("systemctl", $"{(enable ? "enable" : "disable")} {service.SystemdService}", true);
-            Info($"{service.ServiceName}->{(enable ? "设置" : "禁止")}开机启动完成");
+            Info($"{service.ServiceName}->{(enable ? "启用" : "禁止")}开机启动完成");
         }
         #endregion
         #region 热更新：启动新实例进程+关闭旧实例进程
-        private class UpdateSet
-        {
-            public string CurPid { get; set; }
-            public string CurPath { get; set; }
-            public string NewPid { get; set; }
-            public string NewPath { get; set; }
-            public bool UpdateBak { get; set; }
-        }
         private static void HotUpdate(UpdateMode mode, UpdateServiceConf service, string zipFile, string deployPath, string updatePath)
         {
             string curPid = string.Empty;
@@ -202,7 +197,7 @@ namespace Yu.DotnetUpdater
                     }
                     newPath = updatePath;
                     newPorts = service.Ports;
-                    Info($"->当前为备用实例，启用主实例[{string.Join(",", curPorts)}]->[{string.Join(",", newPorts)}]...");
+                    Info($"->当前为备用实例，启用主实例[{string.Join(",", curPorts)},{curPath}]->[{string.Join(",", newPorts)},{newPath}]...");
                 }
                 #region MyRegion
                 //var mainKeys = service.Ports.Select(p => $":{p} backup;").ToList();
@@ -307,10 +302,13 @@ namespace Yu.DotnetUpdater
                 ZipFile.ExtractToDirectory(zipFile, newPath, Encoding.UTF8, true);
                 if (service.KillOldWaitSeconds > 0)
                 {
-                    var serviceFile = service.SystemdService;
-                    if (newPath.EndsWith("2")) serviceFile = $"{service.ServiceName.ToLower()}2.service";
-                    var systemdServiceFile = Path.Combine("usr/lib/systemd/system", serviceFile);
-                    UpdateBootstrap(service, systemdServiceFile, false);//双目录模式：禁止开机自启，避免启动后有逻辑影响
+                    if (string.IsNullOrWhiteSpace(service.SystemdService))
+                    {
+                        var serviceFile = service.SystemdService;
+                        if (newPath.EndsWith("2")) serviceFile = $"{service.ServiceName.ToLower()}2.service";
+                        var systemdServiceFile = Path.Combine(SystemdPath, serviceFile);
+                        UpdateBootstrap(service, systemdServiceFile, false);//双目录模式：禁止开机自启，避免启动后有逻辑影响
+                    }
                 }
             }
             var dotnetArg = BuildArgs(newPath, service.ServiceName, newPorts);
@@ -326,15 +324,17 @@ namespace Yu.DotnetUpdater
             {
                 if (mode == UpdateMode.Hot2)
                 {
-                    var serviceFile = service.SystemdService;
-                    if (newPath.EndsWith("2")) serviceFile = $"{service.ServiceName.ToLower()}2.service";
-                    var systemdServiceFile = Path.Combine("usr/lib/systemd/system", serviceFile);
-                    UpdateBootstrap(service, systemdServiceFile, false);//双目录模式：禁止开机自启，避免启动后有逻辑影响
+                    if (string.IsNullOrWhiteSpace(service.SystemdService))
+                    {
+                        var serviceFile = service.SystemdService;
+                        if (newPath.EndsWith("2")) serviceFile = $"{service.ServiceName.ToLower()}2.service";
+                        var systemdServiceFile = Path.Combine(SystemdPath, serviceFile);
+                        UpdateBootstrap(service, systemdServiceFile, false);//双目录模式：禁止开机自启，避免启动后有逻辑影响
+                    }
                 }
                 new Thread(delegate ()
                 {
-                    var waitSeconds = service.KillOldWaitSeconds - 1;
-                    KillProcess(curPid, service.ServiceName, waitSeconds);
+                    KillProcess(curPid, service.ServiceName, service.KillOldWaitSeconds);
                 })
                 { IsBackground = true }.Start();
             }

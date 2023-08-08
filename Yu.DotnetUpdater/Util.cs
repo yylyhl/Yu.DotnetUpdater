@@ -11,7 +11,7 @@ namespace Yu.DotnetUpdater
         /// <summary>
         /// 有错误或警告
         /// </summary>
-        static bool _warnOrError = true;
+        static bool _warnOrError = false;
         /// <summary>
         /// 有错误或警告
         /// </summary>
