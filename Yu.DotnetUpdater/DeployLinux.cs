@@ -158,7 +158,7 @@ namespace Yu.DotnetUpdater
         #endregion
 
         #region 热更新：启动新实例进程+关闭旧实例进程
-        private static void HotUpdate(UpdateMode mode, UpdateServiceConf service, string zipFile, string deployPath, string updatePath)
+        private static void HotUpdate(UpdateMode mode, UpdateServiceConf service, string zipFile, string updatePath)
         {
             string curPid = string.Empty;
             var curPath = updatePath;
@@ -170,7 +170,7 @@ namespace Yu.DotnetUpdater
             //无端口：根据id可判断新旧，单目录模式无法确定主备，主备（若有）文件都更新
             if (!string.IsNullOrWhiteSpace(service.NginxConf))
             {
-                #region 判断主备实例-有端口：通过[nginx主备代理]判断
+                #region 判断主备实例-有端口，通过[nginx主备代理]
                 //进程的nginx配置提前配好
                 string oldNginxConf = Path.Combine(Configuration["NginxConfPath"] + string.Empty, service.NginxConf);
                 var text = File.ReadAllText(oldNginxConf, Encoding.UTF8);
@@ -239,7 +239,7 @@ namespace Yu.DotnetUpdater
             }
             else
             {
-                #region 判断主备实例-无端口：按名称查找，通过[运行状态+运行时长]判断
+                #region 判断主备实例-无端口或有端口无代理：按名称查找，通过[运行状态+运行时长]判断
                 var pids = GetPidsFromPs($"{service.ServiceName}.dll");
                 Info($"->当前实例ids[{string.Join(",", pids)}]...");
                 if (pids.Count > 1)
@@ -610,20 +610,20 @@ namespace Yu.DotnetUpdater
         #endregion
 
         #region 进程启动时间/运行时间/运行时长
-        private static TimeSpan ElapsedTimes(string pid)
+        private static TimeSpan ElapsedTimes(object pid)
         {
             var result = StartProcess("ps", $"-p {pid} -o etime=", true);
             if (string.IsNullOrWhiteSpace(result)) return default;
             _ = TimeSpan.TryParse(result, out var time);
             return time;
         }
-        private static long ElapsedSeconds(string pid)
+        private static long ElapsedSeconds(object pid)
         {
             var result = StartProcess("ps", $"-p {pid} -o etimes=", true);
             _ = long.TryParse(result, out var seconds);
             return seconds;
         }
-        private static DateTime StartTime(string pid)
+        private static DateTime StartTime(object pid)
         {
             var result = StartProcess("ps", $" -p {pid} -o lstart=", true);
             if (string.IsNullOrWhiteSpace(result)) return default;

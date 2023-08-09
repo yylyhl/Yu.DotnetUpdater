@@ -483,9 +483,9 @@ namespace Yu.DotnetUpdater
         }
         #endregion
 
-        #region Service/Nginx-热更新(双实例服务)
+        #region Service/Nginx-热更新
         /// <summary>
-        /// Service/Nginx-热更新(双实例服务)
+        /// Service/Nginx-热更新
         /// </summary>
         /// <param name="updateMode">updateMode</param>
         /// <param name="service">服务配置</param>
@@ -829,6 +829,24 @@ namespace Yu.DotnetUpdater
         }
         #endregion
 
+        #region 获取pid-根据端口
+        /// <summary>
+        /// 获取pid-根据端口
+        /// </summary>
+        /// <returns>pid</returns>
+        /// <remarks>
+        /// <br/>https://learn.microsoft.com/zh-cn/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/cc754599(v=ws.11)
+        /// <br/>https://learn.microsoft.com/zh-cn/windows/win32/services/configuring-a-service-using-sc
+        /// <br/>https://learn.microsoft.com/zh-cn/windows-server/administration/windows-commands/sc-query
+        /// </remarks>
+        private static int GetPidByPort(int port)
+        {
+            var output = StartProcess("netstat", "-a -n -o", true);
+            var pidStr = GetPidFromOutputByPort(output, port);
+            _ = int.TryParse(pidStr, out var pid);
+            return pid;
+        }
+        #endregion
         #region 获取pid-根据服务名称
         /// <summary>
         /// 获取pid-根据服务名称
@@ -936,15 +954,6 @@ namespace Yu.DotnetUpdater
         private static string GetProcessNameByPid(int pid)
         {
             return Process.GetProcessById(pid).ProcessName;
-        }
-        #endregion
-        #region 获取指定端口对应的进程名
-        public static string GetProcessNameByPort(int port)
-        {
-            var output = StartProcess("netstat", "-a -n -o", true);
-            var pidStr = GetPidFromOutputByPort(output, port);
-            _ = int.TryParse(pidStr, out var pid);
-            return GetProcessNameByPid(pid);
         }
         #endregion
 
