@@ -36,19 +36,20 @@ namespace Yu.DotnetUpdater
         /// <summary>
         /// Console.WriteLine(msg);Default
         /// </summary>
-        public static void Info(string msg)
+        public static void Info(string msg, ConsoleColor? color = null)
         {
+            //var defaultColor = Console.ForegroundColor;
+            var defaultColor = ConsoleColor.Gray;
+            Console.ForegroundColor = color ?? defaultColor;
             Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}]{msg}");
+            Console.ForegroundColor = defaultColor;
         }
         /// <summary>
         /// Console.WriteLine(msg);Green
         /// </summary>
         public static void WriteGreen(string msg)
         {
-            var defColor = Console.ForegroundColor;
-            Console.ForegroundColor = ConsoleColor.Green;
-            Info(msg);
-            Console.ForegroundColor = defColor;
+            Info(msg, ConsoleColor.Green);
         }
         /// <summary>
         /// Console.WriteLine(msg);Yellow
@@ -56,10 +57,7 @@ namespace Yu.DotnetUpdater
         public static void WriteYellow(string msg)
         {
             WarnOrError = true;
-            var defColor = Console.ForegroundColor;
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Info(msg);
-            Console.ForegroundColor = defColor;
+            Info(msg, ConsoleColor.Yellow);
         }
         /// <summary>
         /// Console.WriteLine(msg);Red
@@ -67,11 +65,9 @@ namespace Yu.DotnetUpdater
         public static void WriteRed(string msg, Exception? ex = null)
         {
             WarnOrError = true;
-            var defColor = Console.ForegroundColor;
-            Console.ForegroundColor = ConsoleColor.Red;
-            Info(msg);
+            Info(msg, ConsoleColor.Red);
             Console.WriteLine(ex);
-            Console.ForegroundColor = defColor;
+            Console.WriteLine(string.Empty);
         }
         #endregion
 
@@ -215,7 +211,7 @@ namespace Yu.DotnetUpdater
             }
             catch (Exception ex)
             {
-                WriteRed($"[{nameof(CopyChildFolderFile)}]{ex.Message}");
+                WriteRed($"[{nameof(CopyChildFolderFile)}]{ex.Message}", ex);
             }
         }
         #endregion
@@ -258,7 +254,7 @@ namespace Yu.DotnetUpdater
             }
             catch (Exception ex)
             {
-                WriteRed($"[{nameof(CopyFolderFile)}]{ex.Message}");
+                WriteRed($"[{nameof(CopyFolderFile)}]{ex.Message}", ex);
             }
         }
         #endregion

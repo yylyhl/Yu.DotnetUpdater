@@ -142,14 +142,14 @@ namespace Yu.DotnetUpdater
                         }
                         catch (Exception ex)
                         {
-                            WriteRed($"请求url出错[{service.OpenUrl}]{ex.Message}]{ex}");
+                            WriteRed($"请求url出错[{service.OpenUrl}]{ex.Message}]", ex);
                         }
                     });
                 }
             }
             catch (Exception ex)
             {
-                WriteRed($"{service.UpdatePack}->[{nameof(IISSiteUpdate)}]{ex}");
+                WriteRed($"{service.UpdatePack}->[{nameof(IISSiteUpdate)}]", ex);
             }
             finally
             {
@@ -184,7 +184,7 @@ namespace Yu.DotnetUpdater
             }
             catch (Exception ex)
             {
-                WriteRed($"->[{argument}]{ex.Message}");
+                WriteRed($"->[{argument}]{ex.Message}", ex);
             }
             finally
             {
@@ -215,7 +215,7 @@ namespace Yu.DotnetUpdater
             }
             catch (Exception ex)
             {
-                WriteRed($"->[{argument}]{ex.Message}");
+                WriteRed($"->[{argument}]{ex.Message}", ex);
             }
             finally
             {
@@ -431,7 +431,7 @@ namespace Yu.DotnetUpdater
             }
             catch (Exception ex)
             {
-                WriteRed($"{service.ServiceName}->[{nameof(HotUpdate)}]{ex.Message} {ex.InnerException?.Message}");
+                WriteRed($"{service.ServiceName}->[{nameof(HotUpdate)}]{ex.Message}", ex);
                 HotUpdate(updateMode, service, zipFile, deployPath, updatePath, reTry - 1);
             }
             finally
@@ -470,7 +470,7 @@ namespace Yu.DotnetUpdater
             }
             catch (Exception ex)
             {
-                WriteRed($"{service.ServiceName}->[{nameof(ColdUpdate)}]{ex.Message}");
+                WriteRed($"{service.ServiceName}->[{nameof(ColdUpdate)}]{ex.Message}", ex);
                 Info($"{service.ServiceName}->等待重试...");
                 Thread.Sleep(2000);
                 ColdUpdate(service, zipFile, updatePath, reTry - 1);
@@ -501,10 +501,11 @@ namespace Yu.DotnetUpdater
             {
                 stopwatch.Start();
                 //todo：主备实例文件都更新or删除服务(双目录)，避免开机自启后有旧逻辑影响
-                #region 第一次 无任何服务
-                if (!ServiceController.GetServices().Any(s => s.ServiceName == service.ServiceName))
+                var services = ServiceController.GetServices();
+                #region A-无任何服务
+                if (!services.Any(s => string.Compare(s.ServiceName, service.ServiceName, true) == 0 || string.Compare(s.ServiceName, service.ServiceName + 2, true) == 0))
                 {
-                    Info($"{service.ServiceName}->第一次 无任何服务");
+                    Info($"{service.ServiceName}->A-无任何服务");
                     if (!CreateService(updatePath, service.ServiceName, service.ExecuteFileName, service.ServiceDescription)) return;
                     Info($"{zipFile}->解压Zip文件至{updatePath}...");
                     ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
@@ -518,42 +519,45 @@ namespace Yu.DotnetUpdater
                 #endregion
                 var updServiceName = service.ServiceName + 2;
                 var stopServiceName = service.ServiceName;
-                #region 第二次 无备用服务 直接安装启动备用服务
-                if (!ServiceController.GetServices().Any(s => s.ServiceName == service.ServiceName + 2))
+                #region B-无备用服务 直接安装启动备用服务
+                if (!services.Any(s => string.Compare(s.ServiceName, service.ServiceName + 2, true) == 0))
                 {
-                    Info($"{service.ServiceName}->第二次 无备用服务 直接安装启动备用服务");
+                    Info($"{service.ServiceName}->B-无备用服务 直接安装启动备用服务");
                     if (updateMode == UpdateMode.Hot2)
                     {
                         //双目录模式
                         updatePath = Path.Combine(deployPath, service.Path + 2);
                         CopyChildFolderFile(Path.Combine(deployPath, service.Path), updatePath, true, "log", "logs");
-                        #region 更新端口
-                        var jsonConf = Path.Combine(updatePath, "appsettings.json");
-                        string jsonString = File.ReadAllText(jsonConf, Encoding.UTF8);
-                        jsonString = jsonString.Replace($":{service.Ports[0]}", $":{service.BakPorts[0]}");
-                        jsonString = jsonString.Replace($"{service.Ports[1]}", $"{service.BakPorts[1]}");
+                        if (service.Ports.Any(p => p > 0))
+                        {
+                            #region 更新端口
+                            var jsonConf = Path.Combine(updatePath, "appsettings.json");
+                            string jsonString = File.ReadAllText(jsonConf, Encoding.UTF8);
+                            jsonString = jsonString.Replace($":{service.Ports[0]}", $":{service.BakPorts[0]}");
+                            jsonString = jsonString.Replace($"{service.Ports[1]}", $"{service.BakPorts[1]}");
 
-                        //var lines = jsonString.ToString().Split("\n");
-                        //var count = 2;
-                        //for (var ln = 0; ln < lines.Length; ln++)
-                        //{
-                        //    if (count <= 0) break;
-                        //    if (lines[ln].Contains("urls"))
-                        //    {
-                        //        lines[ln] = lines[ln].Replace(":5000", ":5002");
-                        //        count--;
-                        //        continue;
-                        //    }
-                        //    if (lines[ln].Contains("Port"))
-                        //    {
-                        //        lines[ln] = lines[ln].Replace("7000", ":7001");
-                        //        count--;
-                        //        continue;
-                        //    }
-                        //}
-                        //jsonString = string.Join(string.Empty, lines); 
-                        File.WriteAllText(jsonConf, jsonString, Encoding.UTF8);
-                        #endregion
+                            //var lines = jsonString.ToString().Split("\n");
+                            //var count = 2;
+                            //for (var ln = 0; ln < lines.Length; ln++)
+                            //{
+                            //    if (count <= 0) break;
+                            //    if (lines[ln].Contains("urls"))
+                            //    {
+                            //        lines[ln] = lines[ln].Replace(":5000", ":5002");
+                            //        count--;
+                            //        continue;
+                            //    }
+                            //    if (lines[ln].Contains("Port"))
+                            //    {
+                            //        lines[ln] = lines[ln].Replace("7000", ":7001");
+                            //        count--;
+                            //        continue;
+                            //    }
+                            //}
+                            //jsonString = string.Join(string.Empty, lines); 
+                            File.WriteAllText(jsonConf, jsonString, Encoding.UTF8);
+                            #endregion
+                        }
                     }
                     else
                     {
@@ -567,7 +571,8 @@ namespace Yu.DotnetUpdater
                 }
                 #endregion
 
-                #region 第三次及以上，判断正在使用的服务实例
+                #region C-判断正在使用的服务实例
+                Info($"{service.ServiceName}->C-判断正在使用的服务实例");
                 if (!string.IsNullOrWhiteSpace(service.NginxConf))
                 {
                     #region 判断正在使用的服务实例：通过nginx主备代理判断，针对用nginx代理的多实例服务
@@ -597,9 +602,8 @@ namespace Yu.DotnetUpdater
                 else
                 {
                     #region 判断新旧实例-无端口：通过[运行状态+运行时长]判断，针对无nginx代理的实例
-                    var services = ServiceController.GetServices();
-                    var mainStatus = services.Where(s => s.ServiceName == service.ServiceName).FirstOrDefault()!.Status;
-                    var bakStatus = services.Where(s => s.ServiceName == updServiceName).FirstOrDefault()!.Status;
+                    var mainStatus = services.Where(s => s.ServiceName == service.ServiceName).Select(d => d.Status).FirstOrDefault();
+                    var bakStatus = services.Where(s => s.ServiceName == updServiceName).Select(d => d.Status).FirstOrDefault();
                     if (mainStatus == ServiceControllerStatus.Running && bakStatus == ServiceControllerStatus.Running)
                     {
                         var mainPid = GetPidByServiceName2(service.ServiceName);
@@ -634,6 +638,7 @@ namespace Yu.DotnetUpdater
                     #endregion
                 }
                 Info($"更新启用{updServiceName}，停用备用服务{stopServiceName}...");
+                CreateService(updatePath, updServiceName, service.ExecuteFileName, service.ServiceDescription);
                 using (var sc = new ServiceController(updServiceName))
                 {
                     if (!StopService(sc)) return;//停止服务
@@ -655,7 +660,7 @@ namespace Yu.DotnetUpdater
             }
             catch (Exception ex)
             {
-                WriteRed($"{service.ServiceName}->[{nameof(HotUpdate)}]{ex.Message} {ex.InnerException?.Message}");
+                WriteRed($"{service.ServiceName}->[{nameof(HotUpdate)}]{ex.Message}", ex);
                 HotUpdate(updateMode, service, zipFile, deployPath, updatePath, reTry - 1);
             }
             finally
@@ -672,6 +677,7 @@ namespace Yu.DotnetUpdater
             using (var sc = new ServiceController(startServiceName))
             {
                 StartService(sc);//启动服务
+                SetAutoStart(sc.ServiceName, true);//允许自启
             }
             #region 更新重载nginx设置（若用nginx）
             if (updateMode != UpdateMode.Cold && !string.IsNullOrWhiteSpace(service.NginxConf))
@@ -691,14 +697,15 @@ namespace Yu.DotnetUpdater
                 {
                     using (var sc = new ServiceController(startServiceName))
                     {
-                        StopService(sc);//停止服务
+                        StopService(sc);
                     }
-                    DeleteService(startServiceName);//删除服务
+                    SetAutoStart(startServiceName, false);
                     return;
                 }
             }
             #endregion
-            #region 停止并删除旧服务及文件
+            SetAutoStart(stopServiceName, false);
+            #region 停止服务+删除服务
             if (service.KillOldWaitSeconds > 0)
             {
                 new Thread(delegate ()
@@ -709,9 +716,9 @@ namespace Yu.DotnetUpdater
                     {
                         using (var sc = new ServiceController(stopServiceName))
                         {
-                            StopService(sc, 1);//停止服务
+                            StopService(sc, 1);
                         }
-                        DeleteService(stopServiceName);//删除服务
+                        //DeleteService(stopServiceName);
                     }
                 })
                 { IsBackground = true }.Start();
@@ -736,6 +743,7 @@ namespace Yu.DotnetUpdater
                 var cmdDescription = $"description {serviceName} {(string.IsNullOrWhiteSpace(serviceDescription) ? serviceName : serviceDescription)}";
                 Info($">sc {cmdDescription}");
                 StartProcess("sc", cmdDescription, false);
+                Thread.Sleep(1000);
                 return true;
             }
             catch (Exception ex)
@@ -757,32 +765,48 @@ namespace Yu.DotnetUpdater
         #region 停止服务
         private static bool StopService(ServiceController sc, int waitSeconds = 9)
         {
+            var result = true;
             Info($"{sc.ServiceName}->状态：{sc.Status}");
-            if (sc.Status != ServiceControllerStatus.Stopped)
+            try
             {
-                Info($"{sc.ServiceName}->服务停止中(最多1~{10}秒)...");
-                try
+                if (sc.Status != ServiceControllerStatus.Stopped)
                 {
+                    Info($"{sc.ServiceName}->服务停止中(最多1~{10}秒)...");
                     sc.Stop();
                     sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(waitSeconds));
+                    Info($"{sc.ServiceName}->服务已停止");
                 }
-                catch// (System.ServiceProcess.TimeoutException tex)
+            }
+            catch (System.ServiceProcess.TimeoutException tex)
+            {
+                Info($"{sc.ServiceName}->服务停止超时，放大招...");
+                result = false;
+            }
+            catch (Exception ex)
+            {
+                Info($"{sc.ServiceName}->{ex.Message}");
+                result = false;
+            }
+            finally
+            {
+                if (!result)
                 {
-                    Info($"{sc.ServiceName}->服务停止超时，放大招...");
                     Info($">sc queryex {sc.ServiceName}");
                     var pid = GetPidByServiceName(sc.ServiceName);
-                    if (pid < 1)
+                    if (pid > 0)
+                    {
+                        var taskkill = $"/PID {pid} /F";
+                        Info($">taskkill {taskkill}");
+                        StartProcess("taskkill", taskkill, false);
+                        result = true;
+                    }
+                    else
                     {
                         WriteYellow($"没取到pid，手动介入下...");
-                        return false;
                     }
-                    var taskkill = $"/PID {pid} /F";
-                    Info($">taskkill {taskkill}");
-                    StartProcess("taskkill", taskkill, false);
                 }
-                Info($"{sc.ServiceName}->服务已停止");
             }
-            return true;
+            return result;
         }
         #endregion
         #region 删除服务
@@ -793,7 +817,16 @@ namespace Yu.DotnetUpdater
             Info($">sc {cmdDelete}");
             StartProcess("sc", cmdDelete, false);
             Info($"{serviceName}->服务已删除");
-        } 
+        }
+        #endregion
+        #region 设置服务自启状态
+        private static void SetAutoStart(string serviceName, bool autoStart = true)
+        {
+            Info($"{serviceName}->设置服务自启状态-{autoStart}");
+            var cmd = $"config {serviceName} start= {(autoStart ? "auto" : "demand")}";
+            Info($">sc {cmd}");
+            StartProcess("sc", cmd, false);
+        }
         #endregion
 
         #region 获取pid-根据服务名称

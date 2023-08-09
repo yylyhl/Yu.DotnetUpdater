@@ -124,7 +124,7 @@ namespace Yu.DotnetUpdater
             }
             catch (Exception ex)
             {
-                WriteRed($"{service.ServiceName}->[{nameof(UpdateService)}]{ex}");
+                WriteRed($"{service.ServiceName}->[{nameof(UpdateService)}]", ex);
                 UpdateService(mode, service, zipFile, deployPath, updatePath, reTry - 1);
             }
             finally
@@ -134,19 +134,29 @@ namespace Yu.DotnetUpdater
             }
         }
         #endregion
-        #region 设置开机启动
-        private static void UpdateBootstrap(UpdateServiceConf service, string systemdServiceFile, bool enable)
+
+        #region 冷更新：关闭旧实例进程+启动新实例进程
+        private static void ColdUpdate(UpdateServiceConf service, string zipFile, string updatePath)
         {
-            if (!enable && !File.Exists(systemdServiceFile))
-            {
-                Info($"{service.ServiceName}->开机启动文件不存在：{systemdServiceFile}");
-                return;
-            }
-            Info($"->{(enable ? "启用" : "禁止")}开机启动[{systemdServiceFile}]...");
-            StartProcess("systemctl", $"{(enable ? "enable" : "disable")} {service.SystemdService}", true);
-            Info($"{service.ServiceName}->{(enable ? "启用" : "禁止")}开机启动完成");
+            Info($"->解压Zip文件中[{updatePath}]...");
+            ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
+            var oldPid = GetPidsFromPs($"{service.ServiceName}.dll").FirstOrDefault();//冷更新直接按名称查找
+            #region 一次性执行
+            //var oneCmd = $"cd {updatePath} && nohup dotnet {BuildArgs(updatePath, service.ServiceName, service.Ports)}";
+            //if (!string.IsNullOrWhiteSpace(oldPid))
+            //{
+            //    oneCmd = $"kill -15 {oldPid} && {oneCmd} && kill -9 {oldPid}";
+            //}
+            //Info($"{serviceName}->关闭原进程+启动新进程：{oneCmd}");
+            //StartProcess(oneCmd, string.Empty, false);
+            #endregion
+            KillProcess(service.ServiceName, oldPid, 1);
+            var dotnetArg = BuildArgs(updatePath, service.ServiceName, service.Ports);
+            Info($"{service.ServiceName}->启动新进程：dotnet {dotnetArg}");
+            StartProcess("dotnet", dotnetArg, false);
         }
         #endregion
+
         #region 热更新：启动新实例进程+关闭旧实例进程
         private static void HotUpdate(UpdateMode mode, UpdateServiceConf service, string zipFile, string deployPath, string updatePath)
         {
@@ -319,7 +329,7 @@ namespace Yu.DotnetUpdater
                 Thread.Sleep(5000);
                 ReloadNginxConf(curPorts, newPorts, service);
             }
-            #region 停止并删除旧服务及文件
+            #region 停止服务+禁止自启
             if (service.KillOldWaitSeconds > 0)
             {
                 if (mode == UpdateMode.Hot2)
@@ -354,27 +364,21 @@ namespace Yu.DotnetUpdater
             return newPath;
         }
         #endregion
-        #region 冷更新：关闭旧实例进程+启动新实例进程
-        private static void ColdUpdate(UpdateServiceConf service, string zipFile, string updatePath)
+
+        #region 设置开机启动
+        private static void UpdateBootstrap(UpdateServiceConf service, string systemdServiceFile, bool enable)
         {
-            Info($"->解压Zip文件中[{updatePath}]...");
-            ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
-            var oldPid = GetPidsFromPs($"{service.ServiceName}.dll").FirstOrDefault();//冷更新直接按名称查找
-            #region 一次性执行
-            //var oneCmd = $"cd {updatePath} && nohup dotnet {BuildArgs(updatePath, service.ServiceName, service.Ports)}";
-            //if (!string.IsNullOrWhiteSpace(oldPid))
-            //{
-            //    oneCmd = $"kill -15 {oldPid} && {oneCmd} && kill -9 {oldPid}";
-            //}
-            //Info($"{serviceName}->关闭原进程+启动新进程：{oneCmd}");
-            //StartProcess(oneCmd, string.Empty, false);
-            #endregion
-            KillProcess(service.ServiceName, oldPid, 1);
-            var dotnetArg = BuildArgs(updatePath, service.ServiceName, service.Ports);
-            Info($"{service.ServiceName}->启动新进程：dotnet {dotnetArg}");
-            StartProcess("dotnet", dotnetArg, false);
+            if (!enable && !File.Exists(systemdServiceFile))
+            {
+                Info($"{service.ServiceName}->开机启动文件不存在：{systemdServiceFile}");
+                return;
+            }
+            Info($"->{(enable ? "启用" : "禁止")}开机启动[{systemdServiceFile}]...");
+            StartProcess("systemctl", $"{(enable ? "enable" : "disable")} {service.SystemdService}", true);
+            Info($"{service.ServiceName}->{(enable ? "启用" : "禁止")}开机启动完成");
         }
         #endregion
+
         #region KillProcess
         private static void KillProcess(string pid, string serviceName, int killWaitSeconds = 1)
         {
