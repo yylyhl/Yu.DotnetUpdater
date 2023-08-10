@@ -67,7 +67,7 @@ namespace Yu.DotnetUpdater
                 #endregion
                 var updateMode = (UpdateMode)services[i].UpdateMode;
                 Info($"更新模式：{updateMode}");
-                if (!string.IsNullOrWhiteSpace(services[i].AppPool))
+                if (services[i].IISConf != null && !string.IsNullOrWhiteSpace(services[i].IISConf.SiteName))
                 {
                     IISSiteUpdate(services[i], zipFile, updatePath, updateMode);
                 }
@@ -95,6 +95,11 @@ namespace Yu.DotnetUpdater
             var stopwatch = new Stopwatch();
             try
             {
+                if (service.Ports == null || !service.Ports.Any(p => p > 0))
+                {
+                    WriteRed($"{service.ServiceName}->缺少端口");
+                    return;
+                }
                 stopwatch.Start();
                 #region 初次部署
                 string[] files = Directory.GetFiles(updatePath);
@@ -102,47 +107,44 @@ namespace Yu.DotnetUpdater
                 {
                     Info($"{service.UpdatePack}->解压Zip文件中...");
                     ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
-
-                    var siteName = service.ServiceName.Replace(".", null);
-                    var hostName = service.OpenUrl.Contains(":") ? service.OpenUrl.Replace("/", null).Split(":")[1] : string.Empty;
-                    var certName = siteName;
-                    CreateIISSite(siteName, updatePath, service.Ports[0], hostName, certName, 0, 0, false, default, 0, default, default);
-                } 
+                }
+                if (!CreateIISSite(service.IISConf, updatePath, service.Ports[0])) { return; }
                 #endregion
                 if (mode != UpdateMode.Cold)
                 {
                     RenameTargetFile(zipFile, updatePath, service.ServiceName);
                     Info($"{service.UpdatePack}->解压Zip文件中...");
                     ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
-                    ApppoolStatusUpdate(service.AppPool, 0);
+                    ApppoolStatusUpdate(service.IISConf.AppPool.AppPoolName, 0);
+                    StartStopSite(service.IISConf.SiteName, true);
                     new Thread(delegate () { DelTmpFile(updatePath, 10, false); }) { IsBackground = true }.Start();
                 }
                 else
                 {
-                    ApppoolStatusUpdate(service.AppPool, 2);
-                    StartStopSite(service.SiteName, false);
+                    ApppoolStatusUpdate(service.IISConf.AppPool.AppPoolName, 2);
+                    StartStopSite(service.IISConf.SiteName, false);
                     Thread.Sleep(2000);
                     Info($"{service.UpdatePack}->解压Zip文件中...");
                     ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
-                    ApppoolStatusUpdate(service.AppPool, 1);
-                    StartStopSite(service.SiteName, true);
+                    ApppoolStatusUpdate(service.IISConf.AppPool.AppPoolName, 1);
+                    StartStopSite(service.IISConf.SiteName, true);
                 }
-                if (!string.IsNullOrWhiteSpace(service.OpenUrl))
+                if (!string.IsNullOrWhiteSpace(service.IISConf.OpenUrl))
                 {
                     Thread.Sleep(2000);
                     Task.Run(async () =>
                     {
-                        Info($"{service.UpdatePack}->请求一次：{service.OpenUrl}");
+                        Info($"{service.UpdatePack}->请求一次：{service.IISConf.OpenUrl}");
                         try
                         {
                             using var client = new HttpClient();
-                            var resp = await client.PostAsync(service.OpenUrl, default);
+                            var resp = await client.PostAsync(service.IISConf.OpenUrl, default);
                             await resp.Content.ReadAsStringAsync();
                             //client.PostAsync(service.OpenUrl, default).ContinueWith(res => res.Result.Content.ReadAsStringAsync().Wait(10000));
                         }
                         catch (Exception ex)
                         {
-                            WriteRed($"请求url出错[{service.OpenUrl}]{ex.Message}]", ex);
+                            WriteRed($"请求url出错[{service.IISConf.OpenUrl}]{ex.Message}]", ex);
                         }
                     });
                 }
@@ -227,7 +229,8 @@ namespace Yu.DotnetUpdater
         /// <summary>
         /// 创建IIS站点
         /// </summary>
-        /// <param name="name">站点名称程序池名称</param>
+        /// <param name="siteName">站点名称</param>
+        /// <param name="appPoolName">程序池名称</param>
         /// <param name="path">站点文件路径</param>
         /// <param name="port">端口</param>
         /// <param name="hostName">主机名</param>
@@ -240,53 +243,57 @@ namespace Yu.DotnetUpdater
         /// <param name="restartMinutes">回收间隔分钟数</param>
         /// <param name="restartTimes">回收时间</param>
         /// <param name="maxProcesses">最大进程数</param>
-        private static bool CreateIISSite(string name, string path, int port, string hostName, string certName, int mode, int clrVersion = 0, bool disallowOverlappingRotation = false, long queueLength = 1000, int restartMinutes = 1740, TimeSpan[]? restartTimes = null, long maxProcesses = 1)
+        private static bool CreateIISSite(IISSiteConf iisConfig, string path, int port)
         {
             try
             {
-                ServiceController service = ServiceController.GetServices("127.0.0.1").FirstOrDefault(x => x.ServiceName == "W3SVC");
+                if (iisConfig == null || iisConfig.AppPool==null)
+                {
+                    WriteRed($"缺少 iis/appPool 配置");
+                    return false;
+                }
+                var service = ServiceController.GetServices("127.0.0.1").FirstOrDefault(x => string.Compare(x.ServiceName, "W3SVC", true) == 0);
                 if (service is null)
                 {
                     WriteYellow("先安装 IIS 服务模块 [ 控制面板-所有控制面板项-程序和功能-启用或关闭 Windows 功能：Internet Information Services ]");
                     return default;
                 }
                 var serverManager = new ServerManager();
-                var website = serverManager.Sites[name];
-                if (website != null) return true;
-                if (!CreateAppPool(name, mode, clrVersion, disallowOverlappingRotation, queueLength, restartMinutes, restartTimes, maxProcesses)) { return default; }
+                var site = serverManager.Sites[iisConfig.SiteName];
+                if (site != null) return true;
+                if (!CreateAppPool(iisConfig.AppPool)) { return default; }
                 if (!Directory.Exists(path))
                 {
                     WriteYellow("站点目录不存在");
                     return default;
                 }
-                website = serverManager.Sites.Add(name, path, port);
-                website.ServerAutoStart = true;
-                website.Applications["/"].ApplicationPoolName = name;
-                string bindPrev = website.Bindings[0].Host.Split(new char[] { '.' })[0];
-                var bindingInformation = $"*:{port}:{bindPrev}{hostName}";
-                if (string.IsNullOrWhiteSpace(certName))
+                site = serverManager.Sites.Add(iisConfig.SiteName, path, port);
+                site.ServerAutoStart = true;
+                site.Applications["/"].ApplicationPoolName = iisConfig.AppPool.AppPoolName;
+                site.Applications["/"].SetAttributeValue("preloadEnabled", iisConfig.PreloadEnabled);
+                string bindPrev = site.Bindings[0].Host.Split(new char[] { '.' })[0];
+                var bindingInformation = $"*:{port}:{bindPrev}";
+                if (!string.IsNullOrWhiteSpace(iisConfig.CertName))
                 {
-                    website.Bindings.Add(bindingInformation, "http");
-                }
-                else
-                {
-                    var certInfo = CertInfo(path, certName);
-                    website.Bindings.Add(bindingInformation, certInfo.Item1, certInfo.Item2, SslFlags.None);
+                    //var certInfo = CertInfo(path, iisConfig.CertName);
+                    var certInfo = GetCertificatesHash(iisConfig.CertName, true);
+                    bindingInformation = $"*:443:{bindPrev}{iisConfig.DomainName}";
+                    site.Bindings.Add(bindingInformation, certInfo.Item1, certInfo.Item2, SslFlags.None);
                 }
                 serverManager.CommitChanges();
                 return true;
             }
             catch (Exception ex)
             {
-                WriteRed("创建应用程序池出错", ex);
+                WriteRed("创建iis站点出错", ex);
                 return default;
             }
         }
         private static Tuple<byte[], string> CertInfo(string path, string certName)
         {
             string pfx = Directory.GetFiles(path, "*.pfx", SearchOption.AllDirectories).FirstOrDefault();
-            var certificate = new X509Certificate2(Path.Combine(path, certName), string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
-            certificate = new X509Certificate2(pfx, string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+            //var certificate = new X509Certificate2(Path.Combine(path, certName), string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+            var certificate = new X509Certificate2(pfx, string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
             var certificateHash = certificate.GetCertHash();//证书哈希
 
             var store = new X509Store(StoreName.AuthRoot, StoreLocation.LocalMachine);
@@ -297,7 +304,8 @@ namespace Yu.DotnetUpdater
 
             return new Tuple<byte[], string>(certificateHash, certificateName);
         }
-        private static byte[]? GetCertificatesHash(string certName, bool validOnly = true)
+
+        private static Tuple<byte[], string> GetCertificatesHash(string certName, bool validOnly = true)
         {
             if (string.IsNullOrWhiteSpace(certName)) return default;
             var store = new X509Store(StoreName.My);
@@ -311,7 +319,7 @@ namespace Yu.DotnetUpdater
                     store.Open(OpenFlags.ReadOnly);
                     signingCerts = FindCertificate(store.Certificates, certName, validOnly);
                 }
-                return signingCerts[0].GetCertHash();
+                return new Tuple<byte[], string>(signingCerts[0].GetCertHash(), signingCerts[0].Subject);
             }
             finally
             {
@@ -341,17 +349,23 @@ namespace Yu.DotnetUpdater
         /// <param name="restartMinutes">回收间隔分钟数</param>
         /// <param name="restartTimes">回收时间</param>
         /// <param name="maxProcesses">最大进程数</param>
-        private static bool CreateAppPool(string appPoolName, int mode, int clrVersion = 0, bool disallowOverlappingRotation = false, long queueLength = 1000, int restartMinutes = 1740, TimeSpan[]? restartTimes = null, long maxProcesses = 1)
+        private static bool CreateAppPool(AppPoolConf appPoolConf)
         {
             try
             {
+                if (appPoolConf == null)
+                {
+                    WriteRed($"缺少 appPool 配置");
+                    return false;
+                }
                 var serverManager = new ServerManager();
-                ApplicationPool appPool = serverManager.ApplicationPools[appPoolName];
+                ApplicationPool appPool = serverManager.ApplicationPools[appPoolConf.AppPoolName];
                 //if (appPool != null) serverManager.ApplicationPools.Remove(appPool);
                 if (appPool != null) return true;
-                serverManager.ApplicationPools.Add(appPoolName);
-                appPool = serverManager.ApplicationPools[appPoolName];
-                if (mode == 0)
+                serverManager.ApplicationPools.Add(appPoolConf.AppPoolName);
+                appPool = serverManager.ApplicationPools[appPoolConf.AppPoolName];
+                appPool.StartMode = appPoolConf.StartMode == 0 ? StartMode.OnDemand : StartMode.AlwaysRunning;
+                if (appPoolConf.ManagedPipelineMode == 0)
                 {
                     appPool.ManagedPipelineMode = ManagedPipelineMode.Integrated;//集成模式托管
                 }
@@ -359,20 +373,24 @@ namespace Yu.DotnetUpdater
                 {
                     appPool.ManagedPipelineMode = ManagedPipelineMode.Classic;//经典模式托管 
                 }
-                appPool.QueueLength = queueLength;
-                if (clrVersion == 1)
+                appPool.QueueLength = appPoolConf.QueueLength;
+                if (appPoolConf.ManagegRuntimeVersion == 1)
                 {
                     appPool.ManagedRuntimeVersion = "v4.0";//当设置不存在的版本，不会报错,应先检测是否安装 FrameWork 4.0
                 }
-                else if (clrVersion == 2)
+                else if (appPoolConf.ManagegRuntimeVersion == 2)
                 {
                     appPool.ManagedRuntimeVersion = "v2.0";
                 }
-                appPool.Recycling.DisallowOverlappingRotation = disallowOverlappingRotation;
-                appPool.Recycling.PeriodicRestart.Time = TimeSpan.FromMinutes(restartMinutes);//回收间隔分钟数
-                if (restartTimes != null)
+                else
                 {
-                    foreach (var ts in restartTimes)
+                    appPool.ManagedRuntimeVersion = string.Empty;
+                }
+                appPool.Recycling.DisallowOverlappingRotation = appPoolConf.DisallowOverlappingRotation;
+                appPool.Recycling.PeriodicRestart.Time = TimeSpan.FromMinutes(appPoolConf.RestartMinutes);//回收间隔分钟数
+                if (appPoolConf.RestartTimes != null)
+                {
+                    foreach (var ts in appPoolConf.RestartTimes)
                     {
                         appPool.Recycling.PeriodicRestart.Schedule.Add(ts);
                     }
@@ -389,7 +407,7 @@ namespace Yu.DotnetUpdater
                 appPool.Recycling.PeriodicRestart.PrivateMemory = 0;
 
                 appPool.ProcessModel.IdleTimeout = TimeSpan.FromMinutes(0);
-                appPool.ProcessModel.MaxProcesses = maxProcesses;
+                appPool.ProcessModel.MaxProcesses = appPoolConf.MaxProcesses;
                 appPool.ProcessModel.ShutdownTimeLimit = TimeSpan.FromSeconds(90);//关闭时间限制设置为90秒
 
                 appPool.Cpu.Limit = 80000;
@@ -397,7 +415,8 @@ namespace Yu.DotnetUpdater
                 appPool.Failure.RapidFailProtection = false;
                 appPool.AutoStart = true;
                 serverManager.CommitChanges();
-                appPool.Recycle();
+                //Thread.Sleep(1000);
+                //appPool.Recycle();
             }
             catch (Exception ex)
             {

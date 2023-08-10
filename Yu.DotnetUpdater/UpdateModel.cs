@@ -30,8 +30,10 @@
         /// </summary>
         Hot2 = 2
     }
+
     public class UpdateServiceConf
     {
+        #region windows/linux下服务
         /// <summary>
         /// 自动备份目录名称格式
         /// </summary>
@@ -41,63 +43,119 @@
         /// </summary>
         public string BakDirectoryFormat { get; set; }
         /// <summary>
-        /// 监听端口，0则为系统服务，大于0则为web服务（主线程监听端口, 子线程监听端口）；
+        /// 更新模式
         /// </summary>
-        public int[] Ports { get; set; }
-        /// <summary>
-        /// 备用实例监听端口，用于热更新，说明参考Ports
-        /// </summary>
-        public int[] BakPorts { get; set; }
-        /// <summary>
-        /// 更新目标目录，DeployPath下面；
-        /// </summary>
-        public string Path { get; set; }
-        /// <summary>
-        /// 实际执行文件名称（不含后缀）。针对在同一主机部署多套服务，目录不同但执行文件一致
-        /// </summary>
-        public string ExecuteFileName { get; set; }
+        public int UpdateMode { get; set; }
         /// <summary>
         /// 待更新压缩包，当前目录下；
         /// </summary>
         public string UpdatePack { get; set; }
         /// <summary>
-        /// 更新模式
+        /// 更新目标目录，DeployPath下面；
         /// </summary>
-        public int UpdateMode { get; set; }
+        public string Path { get; set; }
+
         /// <summary>
-        /// 关掉原服务等待秒数，小于1则不关
+        /// [独立进程]实际执行文件名称（不含后缀）。针对在同一主机部署多套服务，目录不同但执行文件一致
+        /// </summary>
+        public string ExecuteFileName { get; set; }
+        /// <summary>
+        /// [独立进程]服务名称；
+        /// </summary>
+        public string ServiceName { get; set; }
+        /// <summary>
+        /// [独立进程]服务描述，无则取ServiceName；
+        /// </summary>
+        public string ServiceDescription { get; set; }
+        /// <summary>
+        /// [独立进程]关掉原服务等待秒数，小于1则不关
         /// </summary>
         public int KillOldWaitSeconds { get; set; }
 
         /// <summary>
-        /// [Port=0]，服务名称；
+        /// [linux系统]开机启动文件；若无需提前配置好才可开机启动；[/usr/lib/systemd/system]
         /// </summary>
-        public string ServiceName { get; set; }
-        /// <summary>
-        /// [Port=0]，服务描述，无则取ServiceName；
-        /// </summary>
-        public string ServiceDescription { get; set; }
+        public string SystemdService { get; set; }
+        #endregion
 
         /// <summary>
-        /// 针对用Nginx代理，服务对应的nginx配置文件名；
+        /// [监听端口]主实例的（主线程监听端口, 子线程监听端口）；
         /// </summary>
-        public string NginxConf { get; set; }
+        public int[] Ports { get; set; }
+        /// <summary>
+        /// [监听端口]备用实例的，用于热更新（主线程监听端口, 子线程监听端口）；
+        /// </summary>
+        public int[] BakPorts { get; set; }
 
         /// <summary>
-        /// [Port>0]，针对IIS，程序池名称；
+        /// [用Nginx代理]服务对应的nginx配置文件名；
         /// </summary>
-        public string AppPool { get; set; }
+        public string NginxConf { get; set; } 
+        //以上配置：windows/linux下服务，有端口监听，nginx代理
+
         /// <summary>
-        /// [Port>0]，针对IIS，站点名称；
+        /// [windows下iis代理] 站点/应用程序池配置 
         /// </summary>
-        public string SiteName { get; set; }
+        public IISSiteConf IISConf { get; set; }
+    }
+
+    public class IISSiteConf
+    {
         /// <summary>
-        /// [Port>0]，针对IIS，更新后访问一次OpenUrl让后续响应更快；
+        /// 更新后访问一次OpenUrl让后续响应更快；
         /// </summary>
         public string OpenUrl { get; set; }
         /// <summary>
-        /// 针对linux系统，开机启动文件；若无需提前配置好才可开机启动；[/usr/lib/systemd/system]
+        /// 站点名称；
         /// </summary>
-        public string SystemdService { get; set; }
+        public string SiteName { get; set; }
+
+        public string DomainName { get; set; }
+        public string CertName { get; set; }
+        public bool PreloadEnabled { get; set; } = true;
+
+        /// <summary>
+        /// 应用程序池配置
+        /// </summary>
+        public AppPoolConf AppPool { get; set; }
+    }
+    public class AppPoolConf
+    {
+        /// <summary>
+        /// 程序池名称；
+        /// </summary>
+        public string AppPoolName { get; set; }
+        /// <summary>
+        /// 启动模式 0:OnDemand, 1:AlwaysRunning
+        /// </summary>
+        public int StartMode { get; set; } = 1;
+        /// <summary>
+        /// 托管管道模式：0:Integrated, 1:Classic
+        /// </summary>
+        public int ManagedPipelineMode { get; set; } = 0;
+        /// <summary>
+        /// .NET CLR Version：0:无, 1:v4.0, 2:v2.0
+        /// </summary>
+        public int ManagegRuntimeVersion { get; set; }
+        /// <summary>
+        /// 禁用重叠回收
+        /// </summary>
+        public bool DisallowOverlappingRotation { get; set; }
+        /// <summary>
+        /// 队列长度
+        /// </summary>
+        public long QueueLength { get; set; } = 1000;
+        /// <summary>
+        /// 回收间隔分钟数
+        /// </summary>
+        public int RestartMinutes { get; set; } = 1740;
+        /// <summary>
+        /// 回收时间
+        /// </summary>
+        public TimeSpan[]? RestartTimes { get; set; }
+        /// <summary>
+        /// 最大工作进程数
+        /// </summary>
+        public long MaxProcesses { get; set; } = 1;
     }
 }

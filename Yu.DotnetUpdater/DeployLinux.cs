@@ -94,7 +94,7 @@ namespace Yu.DotnetUpdater
                 }
                 else
                 {
-                    HotUpdate(mode, service, zipFile, deployPath, updatePath);
+                    HotUpdate(mode, service, zipFile, updatePath);
                 }
                 Info($"{service.ServiceName}->更新完成");
                 #region 设置开机启动
