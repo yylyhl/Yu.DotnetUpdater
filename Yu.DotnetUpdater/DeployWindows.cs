@@ -8,7 +8,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Web.Administration;
 using System.Security.Cryptography.X509Certificates;
-using System.Globalization;
 
 namespace Yu.DotnetUpdater
 {
@@ -25,19 +24,17 @@ namespace Yu.DotnetUpdater
     [System.Runtime.Versioning.UnsupportedOSPlatform("ios")]
     internal partial class DeployWindows : Util
     {
-        #region StartForWindow
+        #region Start
         /// <summary>
-        /// StartForWindow
+        /// Start
         /// </summary>
-        /// <param name="updateIndexs">待更新服务Services索引</param>
-
-        internal static void Start(int[] updateIndexs, UpdateServiceConf[] services)
+        /// <param name="services">待更新项</param>
+        internal static void Start(UpdateServiceConf[] services)
         {
             var stopwatch = new Stopwatch();
             var deployPath = Configuration["DeployPath"];
             for (var i = 0; i < services.Length; i++)
             {
-                if (!updateIndexs.Contains(i)) continue;
                 stopwatch.Reset();
                 stopwatch.Start();
                 if (i > 0) Info(string.Empty);
@@ -102,15 +99,7 @@ namespace Yu.DotnetUpdater
                     return;
                 }
                 stopwatch.Start();
-                #region 初次部署
-                string[] files = Directory.GetFiles(updatePath);
-                if (files == null || files.Length == 0)
-                {
-                    Info($"{service.UpdatePack}->解压Zip文件中...");
-                    ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
-                }
                 if (!CreateIISSite(service.IISConf, updatePath, service.Ports[0])) { return; }
-                #endregion
                 if (mode != UpdateMode.Cold)
                 {
                     RenameTargetFile(zipFile, updatePath, service.ServiceName);
@@ -391,6 +380,7 @@ namespace Yu.DotnetUpdater
                 {
                     appPool.ManagedRuntimeVersion = string.Empty;
                 }
+                appPool.Recycling.DisallowRotationOnConfigChange = appPoolConf.DisallowRotationOnConfigChange;
                 appPool.Recycling.DisallowOverlappingRotation = appPoolConf.DisallowOverlappingRotation;
                 appPool.Recycling.PeriodicRestart.Time = TimeSpan.FromMinutes(appPoolConf.RestartMinutes);//回收间隔分钟数
                 if (appPoolConf.RestartTimes != null)
@@ -1029,7 +1019,7 @@ namespace Yu.DotnetUpdater
                 }
             }
             return new Tuple<bool, bool>(tcpPort, udpPort);
-        } 
+        }
         #endregion
     }
 

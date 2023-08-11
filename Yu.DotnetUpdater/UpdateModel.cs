@@ -149,6 +149,10 @@
         /// </summary>
         public int ManagegRuntimeVersion { get; set; }
         /// <summary>
+        /// 禁止配置更新时回收
+        /// </summary>
+        public bool DisallowRotationOnConfigChange { get; set; }
+        /// <summary>
         /// 禁用重叠回收
         /// </summary>
         public bool DisallowOverlappingRotation { get; set; }

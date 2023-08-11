@@ -21,14 +21,13 @@ namespace Yu.DotnetUpdater
     public class DeployLinux : Util
     {
         private static string SystemdPath => "/usr/lib/systemd/system";
-        #region StartForLinux
-        public static void Start(int[] updateIndexs, UpdateServiceConf[] services)
+        #region Start
+        public static void Start(UpdateServiceConf[] services)
         {
             var stopwatch = new Stopwatch();
             var deployPath = Configuration["DeployPath"];
             for (var i = 0; i < services.Length; i++)
             {
-                if (!updateIndexs.Contains(i)) continue;
                 stopwatch.Reset();
                 stopwatch.Start();
                 if (i > 0) Info(string.Empty);
