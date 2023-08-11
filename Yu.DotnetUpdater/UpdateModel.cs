@@ -109,10 +109,21 @@
         /// 站点名称；
         /// </summary>
         public string SiteName { get; set; }
+        public bool PreloadEnabled { get; set; } = true;
 
         public string DomainName { get; set; }
+        /// <summary>
+        /// CN=domainName.com, O=xxxx有限公司, L=杭州市, S=浙江省, C=CN
+        /// </summary>
         public string CertName { get; set; }
-        public bool PreloadEnabled { get; set; } = true;
+        /// <summary>
+        /// domainName.com.pfx
+        /// </summary>
+        public string CertFile { get; set; }
+        /// <summary>
+        /// password of domainName.com.pfx
+        /// </summary>
+        public string CertPwd { get; set; }
 
         /// <summary>
         /// 应用程序池配置

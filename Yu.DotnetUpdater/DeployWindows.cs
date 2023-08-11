@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Web.Administration;
 using System.Security.Cryptography.X509Certificates;
+using System.Globalization;
 
 namespace Yu.DotnetUpdater
 {
@@ -272,13 +273,19 @@ namespace Yu.DotnetUpdater
                 site.Applications["/"].ApplicationPoolName = iisConfig.AppPool.AppPoolName;
                 site.Applications["/"].SetAttributeValue("preloadEnabled", iisConfig.PreloadEnabled);
                 string bindPrev = site.Bindings[0].Host.Split(new char[] { '.' })[0];
-                var bindingInformation = $"*:{port}:{bindPrev}";
-                if (!string.IsNullOrWhiteSpace(iisConfig.CertName))
+                if (!string.IsNullOrWhiteSpace(iisConfig.DomainName))
                 {
-                    //var certInfo = CertInfo(path, iisConfig.CertName);
-                    var certInfo = GetCertificatesHash(iisConfig.CertName, true);
-                    bindingInformation = $"*:443:{bindPrev}{iisConfig.DomainName}";
-                    site.Bindings.Add(bindingInformation, certInfo.Item1, certInfo.Item2, SslFlags.None);
+                    if (string.IsNullOrWhiteSpace(iisConfig.CertName) && string.IsNullOrWhiteSpace(iisConfig.CertFile))
+                    {
+                        var bindingInformation = $"*:80:{iisConfig.DomainName}";
+                        site.Bindings.Add(bindingInformation, "http");
+                    }
+                    else
+                    {
+                        var bindingInformation = $"*:443:{iisConfig.DomainName}";
+                        var cert = string.IsNullOrWhiteSpace(iisConfig.CertName) ? CertInfo(iisConfig.CertFile, iisConfig.CertPwd) : GetCertificatesHash(iisConfig.CertName, true);
+                        site.Bindings.Add(bindingInformation, cert.Item1, cert.Item2, SslFlags.None);
+                    }
                 }
                 serverManager.CommitChanges();
                 return true;
@@ -289,11 +296,9 @@ namespace Yu.DotnetUpdater
                 return default;
             }
         }
-        private static Tuple<byte[], string> CertInfo(string path, string certName)
+        private static Tuple<byte[], string> CertInfo(string pfxFile, string pfxPwd)
         {
-            string pfx = Directory.GetFiles(path, "*.pfx", SearchOption.AllDirectories).FirstOrDefault();
-            //var certificate = new X509Certificate2(Path.Combine(path, certName), string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
-            var certificate = new X509Certificate2(pfx, string.Empty, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+            var certificate = new X509Certificate2(pfxFile, pfxPwd, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
             var certificateHash = certificate.GetCertHash();//证书哈希
 
             var store = new X509Store(StoreName.AuthRoot, StoreLocation.LocalMachine);
