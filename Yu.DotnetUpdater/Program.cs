@@ -36,11 +36,11 @@ for (var i = 0; i < updateConf.Length; i++)
 #region 选择待更新项
 var vals = GetInputIndexs(updateConf);
 Util.Info($">------------更新项目------------");
-var updateItems = new UpdateServiceConf[vals.Count];
+var updateItems = new List<UpdateServiceConf>();
 foreach (var i in vals)
 {
     Util.Info($">{updateConf[i].UpdatePack}");
-    updateItems[i] = updateConf[i];
+    updateItems.Add(updateConf[i]);
 }
 Util.Info($">------------按[y/Y]确认------------");
 var confim = Console.ReadLine();
@@ -57,12 +57,12 @@ Util.Info($">更新开始...\n");
 stopwatch.Restart();
 if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
 {
-    DeployWindows.Start(updateItems);
+    DeployWindows.Start(updateItems.ToArray());
     Close(stopwatch, 10);
 }
 if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux))
 {
-    DeployLinux.Start(updateItems);
+    DeployLinux.Start(updateItems.ToArray());
     Close(stopwatch, 10);
 }
 else
