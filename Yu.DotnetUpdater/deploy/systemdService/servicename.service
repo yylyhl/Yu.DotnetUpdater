@@ -1,0 +1,23 @@
+# case sensitive
+# /usr/lib/systemd/system
+# disable: systemctl disable servicename.service
+# install: systemctl enable servicename.service
+# start: systemctl start servicename.service
+# status: systemctl status servicename.service
+
+[Unit]
+Description=Webapi服务
+After=syslog.target network.target remote-fs.target nss-lookup.target rabbitmq-server.service mysql.service mysql@.service redis-server.service redis-server@.service
+ 
+[Service]
+WorkingDirectory=/home/deploy/ServiceName
+ExecStart=/usr/bin/dotnet /home/Deploy/ServiceName/ServiceName.dll --urls=https://*:7002 & # 单目录多实例需动态指定端口
+Restart=always # Restart service after 10 seconds if the dotnet service crashes:
+RestartSec=10
+SyslogIdentifier=ServiceName
+User=root
+Environment=ASPNETCORE_ENVIRONMENT=Production
+ 
+[Install]
+# 脚本启动模式,多用户多网络
+WantedBy=multi-user.target

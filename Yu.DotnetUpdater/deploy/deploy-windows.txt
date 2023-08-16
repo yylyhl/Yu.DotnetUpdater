@@ -1,0 +1,158 @@
+# 【iis 热更新】
+程序池高级设置：disallowOverlappingRotation=false
+
+# 【iis 预加载】
+站点高级设置：preloadEnabled=true
+站点配置编辑器：
+<system.webServer>
+	<applicationInitialization doAppInitAfterRestart="true">
+        <add initializationPage="home/about" hostName="" />
+    </applicationInitialization>
+</system.webServer>
+
+
+# 启动/停止iis站点
+C:\Windows\System32\inetsrv\appcmd.exe start site "yu-api"
+C:\Windows\System32\inetsrv\appcmd.exe stop site "yu-api"
+# 启动/停止/回收iis应用程序池
+C:\Windows\System32\inetsrv\appcmd.exe recycle apppool /apppool.name:"yuapi"
+C:\Windows\System32\inetsrv\appcmd.exe stop apppool /apppool.name:"yuapi"
+C:\Windows\System32\inetsrv\appcmd.exe start apppool /apppool.name:"yuapi"
+C:\Windows\System32\inetsrv\appcmd.exe recycle apppool yuapi
+# 停止iis站点 + 回收iis应用程序池 + 启动iis站点
+cd C:\Windows\System32\inetsrv && appcmd.exe stop site "yu-api" && appcmd.exe recycle apppool yuapi & appcmd.exe start site "yu-api"
+
+
+# 删除/创建/停止/启动windows服务
+sc delete Yu.Api
+sc create Yu.Api binpath= C:\\Deploy\\Yu.Api\\Yu.Api.exe start= auto && sc description Yu.Api
+net/sc start Yu.Api
+net/sc stop Yu.Api
+
+
+# 按进程名找pid
+sc queryex Yu.Api
+# 通过pid停止（强制）进程
+taskkill /PID 2648 /F
+
+
+# 需要开启 Windows Time服务
+sc query W32Time
+sc start W32Time
+# 指定时间服务器 
+w32tm /config /manualpeerlist:"ntp1.aliyun.com" /syncfromflags:manual /reliable:yes /update
+# 时间同步
+w32tm /resync
+sc start W32Time && w32tm /config /manualpeerlist:"ntp1.aliyun.com" /syncfromflags:manual /reliable:yes /update && w32tm /resync
+
+
+# 安装 信任开发证书
+    dotnet dev-certs https --trust
+
+
+# 检查 netcore 程序运行状况
+# 安装 dotnet-counters：
+    dotnet tool install --global dotnet-counters
+# 安装 dotnet-trace：
+    dotnet tool install --global dotnet-trace
+# 找到 netcore 程序的 pid。
+    dotnet-trace ps
+# 收集当前 cpu 状态数据
+    dotnet-counters monitor --refresh-interval 1 -p 4332
+# 收集运行代码数据
+    dotnet-trace collect -p 4332 --providers Microsoft-DotNETCore-SampleProfiler
+
+
+
+【安装环境】
+《dotnet安装（Windows）》
+# https://dotnet.microsoft.com/zh-cn/download/dotnet/6.0
+# https://learn.microsoft.com/zh-cn/dotnet/core/install/windows?tabs=net70
+
+【使用 Windows 包管理器 (winget) 进行安装】
+安装 SDK
+winget install Microsoft.DotNet.SDK.6
+安装运行时:ASP.NET Core 运行时/.NET 运行时/.NET 桌面运行时
+# winget install Microsoft.DotNet.AspNetCore.6 && winget install Microsoft.DotNet.Runtime.6 && winget install Microsoft.DotNet.DesktopRuntime.6
+winget install Microsoft.DotNet.AspNetCore.6
+winget install Microsoft.DotNet.Runtime.6
+winget install Microsoft.DotNet.DesktopRuntime.6
+
+【使用 PowerShell 自动化安装】
+安装 SDK
+winget install Microsoft.DotNet.SDK.6
+安装运行时:ASP.NET Core 运行时/.NET 运行时/.NET 桌面运行时
+# winget install Microsoft.DotNet.AspNetCore.6 && winget install Microsoft.DotNet.Runtime.6 && winget install Microsoft.DotNet.DesktopRuntime.6
+winget install Microsoft.DotNet.AspNetCore.6
+winget install Microsoft.DotNet.Runtime.6
+winget install Microsoft.DotNet.DesktopRuntime.6
+
+
+【项目服务安装】
+《服务名 - windows自带》
+sc delete 服务名
+创建服务-无参：sc create 服务名 binpath= D:\\Deploy\\servicepath\\service.exe start= auto
+创建服务-有参：sc create 服务名 binpath= "D:\\Deploy\\servicepath\\service.exe -参数名 D:\\Deploy\\configpath\\config.yml" start= auto
+创建服务-有参：sc create elastic.filebeat binpath= ""D:\\Deploy\\servicepath\\service.exe" -参数名 "D:\\Deploy\\configpath\\config.yml"" start= auto
+sc description 服务名 品瑞商城后台服务
+sc/net start 服务名
+sc config 服务名 start= AUTO (自动)/DEMAND (手动)/DISABLED(禁用)
+《服务名 - nssm》
+cd /d D:\Deploy && nssm remove 服务名
+cd /d D:\Deploy && nssm install 服务名
+
+
+【SSH-Windows】
+https://www.cnblogs.com/cqpanda/p/16153781.html
+https://blog.csdn.net/wengek/article/details/120844573
+【Powershell连接Windows】
+http://ty2y.com/study/sypowershellycljwindowsserver.html
+winrm set winrm/config/client '@{TrustedHosts="118.190.203.182"}'
+Enter-PSSession -ComputerName 118.190.203.182 -Credential Administrator lp@870314
+
+安装SSH服务器
+图像界面：设置-应用-管理可选应用-添加功能--OpenSSH服务器
+PowerShell：Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+
+设置SSH Server服务为自动启动：Set-Service sshd -StartupType Automatic
+设置SSH Server代理服务为自动启动：Set-Service ssh-agent -StartupType Automatic
+启动SSH Server服务：Start-Service sshd
+启动SSH Server代理服务：Start-Service ssh-agent
+
+Set-Service sshd -StartupType Automatic && Set-Service ssh-agent -StartupType Automatic && Start-Service sshd && Start-Service ssh-agent
+
+
+【nginx---BEGIN】
+
+##安装为服务：cd C:\Program Files\nginx && nssm install nginxServer
+##查版本号：nginx -v
+##隐藏版本, 在http{}添加：server_tokens  off;
+##自定义ResponseHeaders, 在server{}添加：add_header headerName 'headerValue';
+##进入nginx目录：cd C:\Program Files\nginx
+
+##启动：cd C:\Program Files\nginx && start nginx或cd C:\Program Files\nginx && nginx.exe
+##停止：
+cd C:\Program Files\nginx && nginx.exe -s stop#快速停止nginx，可能并不保存相关信息
+cd C:\Program Files\nginx && nginx.exe -s quit#完整有序的停止nginx，并保存相关信息
+
+##检查配置文件的正确性：
+cd C:\Program Files\nginx && nginx -t
+
+##配置重载/重启：
+cd C:\Program Files\nginx && nginx -s reload
+###报错：nginx: [error] OpenEvent("Global\ngx_reload_4460") failed (5: Access is denied)
+###解决：https://www.cnblogs.com/CoreXin/p/5743412.html
+         原因是 nginx 作为windows 服务在运行,安全性问题,不能执行；
+         下载pstools https://download.sysinternals.com/files/PSTools.zip
+         使用psexec执行(路径若有空格需用引号)："C:\Program Files\PSTools\psexec.exe" -s "C:\Program Files\nginx\nginx.exe" -p "C:\Program Files\nginx" -s reload
+		 ###报错：PsExec could not start C:\Program on WIN-F0B1UL8OC8K:系统找不到指定的文件。
+
+##按名称查启动进程（命令进程/应用进程）：
+tasklist /fi "imagename eq nginx.exe"
+tasklist /fi “imagename eq nginx.exe”
+##根据端口号查询进程：
+netstat -ano | findstr 30090
+##删除进程（删除命令进程后就无法执行nignx命令，删除应用进程后nginx就会停止）
+taskkill /f /pid 13568
+
+【nginx---END】

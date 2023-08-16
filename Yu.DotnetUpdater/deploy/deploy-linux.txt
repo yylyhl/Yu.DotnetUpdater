@@ -1,0 +1,301 @@
+# 全部书写区分大小写
+
+【基本配置】
+《root密码》
+sudo passwd root
+
+设置目录权限：
+sudo chmod -R 777 /etc/nginx/
+sudo chmod -R 777 /usr/lib/systemd/system
+
+
+《SSH》
+安装ssh:sudo apt-get install openssh-server
+重启ssh服务:sudo service ssh restart/systemctl restart ssh
+修改远程访问权限，PermitRootLogin为yes:vi /etc/ssh/sshd_config
+
+
+《更改时区，默认是0时区》
+运行tzselect 设置时区:tzselect=》选择4亚洲, 回车=》选择9中国, 回车=>选择1北京, 回车=>选择1yes, 回车
+将相应时区文件复制到/etc目录下:sudo cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+查看时间:date -R
+
+
+《更改关机等待进程超时时间》
+Ubuntu16.04之后默认安装了snapd，关机/重启时会出现：a stop job is running for snap daemon
+解决方案=》修改系统默认关机等待进程超时的时间：
+vi /etc/systemd/system.conf
+DefaultTimeoutStopSec默认是90s，将值改小即可
+sudo systemctl daemon-reexec #让系统的设置立即生效(新执行systemd管理器)
+
+
+《远程桌面》
+Vino是GNOME的默认VNC服务器组件，允许远程到Ubuntu。最小化安装的Ubuntu不带Vino，没有共享功能。
+1.安装Vino软件，完成后重启:sudo apt-get install vino
+2.配置共享（Sharing）和屏幕共享（Screen Sharing），设置访问密码之后即可。
+用vnc客户端访问 ip:端口（https://www.realvnc.com/en/connect/download/viewer/）
+用windows远程桌面:选择模式【vnc-any】，端口默认为5900
+或
+sudo apt-get install xrdp vnc4server xbase-clients
+sudo apt-get install dconf-tools
+sudo apt install dconf-editor
+/org/gnome/desktop/remote-access/require-encryption false
+
+
+
+【安装工具】
+
+《Nginx》
+安装:sudo apt-get install nginx -y
+nginx是否在正常运行：ps -A | grep nginx
+卸载:
+# 1.卸载删除除了配置文件以外的所有文件
+sudo apt-get remove nginx nginx-common -y
+# 2.卸载所有东东，包括删除配置文件
+sudo apt-get purge nginx nginx-common -y
+# 2.在上面命令结束后执行，主要是卸载删除Nginx的不再被使用的依赖包
+sudo apt-get autoremove
+# 3.卸载删除两个主要的包
+sudo apt-get remove nginx-full nginx-common
+
+
+《Rabbitmq》
+安装:
+sudo apt-get install erlang-nox -y
+sudo apt-get install rabbitmq-server -y
+配置:
+添加用户:sudo rabbitmqctl add_user 账号 密码
+赋予权限:sudo rabbitmqctl set_user_tags 账号 administrator
+赋予virtual host 中所有资源的配置、写、读权限:sudo rabbitmqctl  set_permissions -p / 账号 '.*' '.*' '.*'
+启用管理界面:sudo rabbitmq-plugins enable rabbitmq_management
+地址:http://host:15672
+
+命令:
+启动:service rabbitmq-server start
+关闭:service rabbitmq-server stop
+重启:service rabbitmq-server restart
+状态:service rabbitmq-server status
+
+
+《Redis》
+安装:sudo apt-get install redis-server -y
+linux:redis.conf
+windows:redis.windows-service.conf
+覆盖配置:cp -r redis.conf /etc/redis
+or
+更改配置:vi /etc/redis/redis.conf
+设置端口: port
+设置密码: requirepass
+启用远程登录
+  1) 注释 bind 127.0.0.1 ::1开头的一行
+  2) protected-mode 设置为 no
+键值过期监听：EVENT NOTIFICATION
+  注释#  notify-keyspace-events ""
+  设置notify-keyspace-events Ex
+
+命令:
+启动:service redis-server start
+关闭:service redis-server stop
+重启:service redis-server restart
+状态:service redis-server status
+
+
+《MongoDB》
+https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-ubuntu/
+1.安装-导入包管理系统使用的公钥:
+sudo apt-get install gnupg && wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc | sudo apt-key add -
+2.安装-为MongoDB创建一个列表文件
+echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-5.0.list
+3.重新加载本地包数据库：sudo apt-get update
+4.安装MongoDB软件包
+    最新版：sudo apt-get install -y mongodb-org
+    特定版：sudo apt-get install -y mongodb-org=5.0.6 mongodb-org-database=5.0.6 mongodb-org-server=5.0.6 mongodb-org-shell=5.0.6 mongodb-org-mongos=5.0.6 mongodb-org-tools=5.0.6
+设置端口+启用远程登录: mongod.cfg
+设置密码: 
+命令:
+启动:service mongod start
+关闭:service mongod stop
+重启:service mongod restart
+状态:service mongod status
+
+
+《Mysql》
+
+# 顺序安装
+sudo apt update && sudo apt upgrade && sudo apt install libaio1 libtinfo5 libmecab2 libjson-perl python2 python2.7 
+sudo dpkg -i libmysqlclient20_5.7.33-1ubuntu18.04_amd64.deb libmysqlclient-dev_5.7.33-1ubuntu18.04_amd64.deb libmysqld-dev_5.7.33-1ubuntu18.04_amd64.deb mysql-common_5.7.33-1ubuntu18.04_amd64.deb mysql-community-source_5.7.33-1ubuntu18.04_amd64.deb mysql-community-server_5.7.33-1ubuntu18.04_amd64.deb mysql-server_5.7.33-1ubuntu18.04_amd64.deb mysql-community-client_5.7.33-1ubuntu18.04_amd64.deb mysql-client_5.7.33-1ubuntu18.04_amd64.deb 
+# 报错处理
+mysql-community-client/mysql-community-server 依赖于 libaio1 (>= 0.3.93)
+mysql-community-client 依赖于 libtinfo5 (>= 6)
+mysql-community-server 依赖于 libmecab2
+ysql-server 依赖于 mysql-community-server
+mysql-client 依赖于 mysql-community-client
+
+sudo apt --fix-broken install -y
+sudo apt install -y libaio1 libmecab2 libtinfo5
+sudo apt-get -f install
+# 自动下载安装
+sudo apt update
+sudo apt upgrade
+sudo apt install libaio1 libtinfo5 libmecab2 libjson-perl python2 python2.7
+wget https://cdn.mysql.com//Downloads/MySQL-5.7/mysql-server_5.7.33-1ubuntu18.04_amd64.deb-bundle.tar
+tar xvf mysql-server_5.7.33-1ubuntu18.04_amd64.deb-bundle.tar
+rm -f mysql-testsuite_5.7.33-1ubuntu18.04_amd64.deb && rm -f mysql-community-test_5.7.33-1ubuntu18.04_amd64.deb && sudo dpkg -i mysql-common_5.7.33-1ubuntu18.04_amd64.deb
+sudo dpkg -i lib*.deb 
+sudo dpkg -i mysql-*.deb
+
+# 远程访问/不区分大小写
+vi /etc/mysql/mysql.conf.d/mysqld.cnf
+  #找到 bind-address 修改值为 0.0.0.0(如果需要远程访问)
+  #设置数据库表名不区分大小写 在[mysqld]下面添加一行：
+  lower_case_table_names=0：表名按给定的大小写存储，比较时大小写区分； 
+  lower_case_table_names=1：表名转小写后存储到，比较时大小写不区分；
+  lower_case_table_names=2：表名按给定的大小写存储，比较时统一转小写比较；
+/etc/init.d/mysql restart #重启mysql
+sudo mysql -uroot -p
+# 切换数据库
+mysql>use mysql;
+# 查询用户表：
+mysql>select host,user,plugin from user;
+# 设置权限与密码
+mysql> ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '密码'; #使用mysql_native_password修改加密规则
+mysql> ALTER USER 'root'@'localhost' IDENTIFIED BY '密码' PASSWORD EXPIRE NEVER; #更新一下用户的密码
+mysql> CREATE USER 'my-dev'@'%' IDENTIFIED BY 'my-pwd';#创建用户
+mysql> ALTER USER 'my-dev'@'%' IDENTIFIED BY 'my-pwd' PASSWORD EXPIRE NEVER; #更新一下用户的密码
+mysql> UPDATE user SET host = '%' WHERE user = 'root'; #允许远程访问
+mysql> grant all on *.* to 'my-dev'@'%' identified by 'my-pwd'; #赋权
+
+# 设置sql_mode = NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION
+/etc/mysql/mysql.conf.d/mysqld.cnf下新增sql_mode = NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION 不然会报错Data too long for column
+
+
+# 刷新cache中配置 刷新权限
+mysql>flush privileges; 
+mysql>quit;
+
+# 卸载
+sudo apt-get autoremove --purge mysql-server 
+sudo apt-get remove mysql-common
+sudo rm -rf /etc/mysql/ /var/lib/mysql
+# 清理残留数据
+dpkg -l | grep ^rc| awk '{print $2}' | sudo xargs dpkg -P
+sudo apt autoremove
+sudo apt autoclean
+一次执行：sudo apt-get autoremove --purge mysql-server && sudo apt-get remove mysql-common && sudo rm -rf /etc/mysql/ /var/lib/mysql && dpkg -l | grep ^rc| awk '{print $2}' | sudo xargs dpkg -P && sudo apt autoremove && sudo apt autoclean
+
+
+【安装环境】
+
+《dotnet安装（ubuntu20.04）》
+# https://docs.microsoft.com/zh-cn/dotnet/core/install/linux-ubuntu
+1.将 Microsoft 包签名密钥添加到受信任密钥列表，并添加包存储库
+wget https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb \
+ && sudo dpkg -i packages-microsoft-prod.deb
+2.安装 SDK
+sudo apt-get update && \
+ sudo apt-get install -y apt-transport-https && \
+ sudo apt-get update && \
+ sudo apt-get install -y dotnet-sdk-5.0
+3.安装运行时
+sudo apt-get update &&\
+ sudo apt-get install -y apt-transport-https && \
+ sudo apt-get update && \
+ sudo apt-get install -y aspnetcore-runtime-5.0
+# 或https://docs.microsoft.com/zh-cn/dotnet/core/install/linux-snap
+#   sudo snap install dotnet-sdk --classic --channel=5.0 && sudo snap alias dotnet-sdk.dotnet dotnet && sudo snap install dotnet-runtime-50 --classic && sudo snap alias dotnet-runtime-50.dotnet dotnet &&  dotnet --version
+
+【安装依赖】
+apt install ffmpeg
+
+
+【项目部署运行】
+《单项目手动部署更新方式（通过shell窗口执行程序时，要端口的程序在命令前需加nohup，否则shell断开后程序会挂掉）》
+kill -15/9 pidvalue && cd /home/deploy/projectName && nohup dotnet projectName.dll --urls=https://*:port &
+kill -15/9 pidvalue && cd /home/deploy/projectName && nohup dotnet projectName.dll &
+# 清理nohup.out：cp /dev/null nohup.out
+
+
+《半自动(批量/单个)部署更新方式（区分大小写）》
+待更新项目按[项目名称]打包为zip文件,拷贝指Yu.DotnetUpdater目录下
+Yu.DotnetUpdater下appsetting.json文件提前配置好
+需nginx代理的项目需指定默认端口
+然后执行命令：cd /home/deploy/Yu.DotnetUpdater && dotnet Yu.DotnetUpdater.dll，显示成功完成即可
+
+# 查看代理项目的nginx代理配置：
+cat /etc/nginx/conf.d/my.web.conf
+cat /etc/nginx/conf.d/my.workerservice.conf
+
+关闭指定服务
+lsof -i:端口，再执行：kill -15/9 进程id
+或以管理员权限执行ps -x，找到要关闭进程的id，再执行：kill -15/9 进程id
+
+部署项目执行时提示以下错误处理办法（dotnet dev-certs https --trust）：
+Unable to configure HTTPS endpoint. No server certificate was specified, and the default developer certificate could not be found or is out of date.
+      To generate a developer certificate run 'dotnet dev-certs https'. To trust the certificate (Windows and macOS only) run 'dotnet dev-certs https --trust'.
+
+
+《设置开机启动(/usr/lib/systemd/system)》
+已启动的服务：systemctl list-unit-files|grep enabled
+是否开机启动：systemctl is-enabled servicename.service
+启动失败的服务：systemctl --failed
+-----------------------------------------------------------
+启用: systemctl enable my.running.monitor.service
+禁用: systemctl disable my.running.monitor.service
+启动: systemctl start my.running.monitor.service
+状态: systemctl status my.running.monitor.service
+
+
+# 转为无bom的utf8文件: old_file文件首开始第4个字节开始读取文件并写入new_file，剥离掉开始4个字节的BOM标志
+tail -c +4 old_file > new_file
+
+
+
+
+【常用命令】
+
+查看文件内容:cat  /etc/hosts
+
+编辑文件:
+  打开:vi filename + enter + i
+  保存退出:esc + :wq! + enter
+  不保存退出:esc + :q! + enter
+
+复制:
+cp -r hosts /etc
+cp -r *.conf /etc
+
+删除
+rm -rf bak
+rm -f 4686547__horxeton.com.*
+
+查看发行本号:cat /etc/issue
+
+ubuntu查看系统资源占用（内存,cpu和进程)
+  1.top 查看ubuntu的资源占用，htop 美化的文字界面
+  2.free  查看内存使用情况
+  3.uptime 更新系统运行时间，负载信息
+  4.vmstat 显示磁盘活动 情况
+
+重启:
+1、reboot
+2、shutdown -r now 立刻重启(root用户使用)
+3、shutdown -r 10 过10分钟du自动重启(root用户使用)
+4、shutdown -r 20:35 在时间为20:35时候zhi重启(root用户使用)
+# 如果是通过shutdown命令设置重启的话，可以用shutdown -c命令取消重启
+
+关机:
+1、halt 立刻关机
+2、poweroff 立刻关机
+3、shutdown -h now 立刻关机(root用户使用)
+4、shutdown -h 10 10分钟后自动关机
+# 如果是通过shutdown命令设置关机的话，可以用shutdown -c命令取消重启
+
+
+【日常问题】
+【radis持久化错误和rabbitmq连接阻塞，造成拒绝写入】
+查看磁盘使用：df -h
+查看文件目录占用：du -sh *
+https://blog.csdn.net/xxmonstor/article/details/81298042
+不用停止WEB服务就可以清空nohup.out的命令
+cp /dev/null nohup.out
+cat /dev/null > nohup.out
