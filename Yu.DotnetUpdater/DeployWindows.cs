@@ -106,7 +106,6 @@ namespace Yu.DotnetUpdater
                     Info($"{service.UpdatePack}->解压Zip文件中...");
                     ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
                     ApppoolStatusUpdate(service.IISConf.AppPool.AppPoolName, 0);
-                    StartStopSite(service.IISConf.SiteName, true);
                     new Thread(delegate () { DelTmpFile(updatePath, 10, false); }) { IsBackground = true }.Start();
                 }
                 else
@@ -160,7 +159,7 @@ namespace Yu.DotnetUpdater
         {
             //var argument = $"recycle/stop/start apppool /apppool.name:\"storeapi\"";
             var argument = $"{(type == 0 ? "recyle" : type == 1 ? "start" : "stop")} apppool {appPoolName}";
-            Info($"开始：{appPoolName}");
+            Info($"开始：{argument}");
             try
             {
                 var info = new ProcessStartInfo
@@ -177,10 +176,6 @@ namespace Yu.DotnetUpdater
             catch (Exception ex)
             {
                 WriteRed($"->[{argument}]{ex.Message}", ex);
-            }
-            finally
-            {
-                Info($"结束：{argument}");
             }
         }
         #endregion
@@ -208,10 +203,6 @@ namespace Yu.DotnetUpdater
             catch (Exception ex)
             {
                 WriteRed($"->[{argument}]{ex.Message}", ex);
-            }
-            finally
-            {
-                Info($"结束：{argument}");
             }
         }
         #endregion
