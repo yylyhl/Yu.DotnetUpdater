@@ -60,7 +60,7 @@ if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtim
     DeployWindows.Start(updateItems.ToArray());
     Close(stopwatch, 10);
 }
-if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux))
+else if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux))
 {
     DeployLinux.Start(updateItems.ToArray());
     Close(stopwatch, 10);
