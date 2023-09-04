@@ -804,6 +804,7 @@ namespace Yu.DotnetUpdater
                         Info($">taskkill {taskkill}");
                         StartProcess("taskkill", taskkill, false);
                         result = true;
+                        Thread.Sleep(2000);
                     }
                     else
                     {
