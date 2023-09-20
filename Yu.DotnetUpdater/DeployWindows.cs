@@ -395,6 +395,7 @@ namespace Yu.DotnetUpdater
                 appPool.ProcessModel.IdleTimeout = TimeSpan.FromMinutes(0);
                 appPool.ProcessModel.MaxProcesses = appPoolConf.MaxProcesses;
                 appPool.ProcessModel.ShutdownTimeLimit = TimeSpan.FromSeconds(90);//关闭时间限制设置为90秒
+                appPool.ProcessModel.LoadUserProfile = appPoolConf.LoadUserProfile;
 
                 appPool.Cpu.Limit = 80000;
                 appPool.Cpu.Action = ProcessorAction.KillW3wp;

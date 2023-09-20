@@ -172,5 +172,9 @@
         /// 最大工作进程数
         /// </summary>
         public long MaxProcesses { get; set; } = 1;
+        /// <summary>
+        /// 加载用户配置文件
+        /// </summary>
+        public bool LoadUserProfile { get; set; }
     }
 }
