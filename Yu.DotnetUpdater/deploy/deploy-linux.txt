@@ -69,6 +69,11 @@ sudo apt-get install rabbitmq-server -y
 赋予virtual host 中所有资源的配置、写、读权限:sudo rabbitmqctl  set_permissions -p / 账号 '.*' '.*' '.*'
 启用管理界面:sudo rabbitmq-plugins enable rabbitmq_management
 地址:http://host:15672
+延时插件:
+https://github.com/rabbitmq/rabbitmq-delayed-message-exchange/releases
+插件.ez文件解压后放在plugins目录中
+启用插件：rabbitmq-plugins enable rabbitmq_delayed_message_exchange && service rabbitmq-server restart
+使用插件：声明一个类型为"x-delayed-message"的exchange，并配置一个可选参数key为"x-delayed-type"，值为交换机类型(topic/direct/fanout)的属性。
 
 命令:
 启动:service rabbitmq-server start

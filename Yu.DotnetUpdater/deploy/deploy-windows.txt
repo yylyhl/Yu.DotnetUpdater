@@ -156,3 +156,33 @@ netstat -ano | findstr 30090
 taskkill /f /pid 13568
 
 【nginx---END】
+
+
+
+《Rabbitmq》
+##安装[erlang/RabbitMQ]:
+https://www.erlang.org/downloads
+https://www.rabbitmq.com/install-windows.html
+
+##安装启用Web管理插件:
+打开RabbitMQ Command Prompt，执行命令 rabbitmq-plugins enable rabbitmq_management 
+完成后重启RabbitMQ服务，打开浏览器输入 http://127.0.0.1:15672/ 使用默认账号密码[guest/guest]登录
+
+##配置:
+对exchange，queue，用户等进行添加、修改、删除操作。
+##配置:
+添加用户:rabbitmqctl add_user 账号 密码
+赋予权限:rabbitmqctl set_user_tags 账号 administrator
+赋予virtual host 中所有资源的配置、写、读权限:sudo rabbitmqctl  set_permissions -p / 账号 '.*' '.*' '.*'
+
+##延时插件:
+https://github.com/rabbitmq/rabbitmq-delayed-message-exchange/releases
+插件.ez文件解压后放在plugins目录中
+启用插件：rabbitmq-plugins enable rabbitmq_delayed_message_exchange && rabbitmq-server restart
+使用插件：声明一个类型为"x-delayed-message"的exchange，并配置一个可选参数key为"x-delayed-type"，值为交换机类型(topic/direct/fanout)的属性。
+
+##命令:
+启动:rabbitmq-server start
+关闭:rabbitmq-server stop
+重启:rabbitmq-server restart
+状态:rabbitmq-server status
