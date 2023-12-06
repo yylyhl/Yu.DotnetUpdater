@@ -128,7 +128,8 @@ namespace Yu.DotnetUpdater
                         {
                             using var client = new HttpClient();
                             var resp = await client.PostAsync(service.IISConf.OpenUrl, default);
-                            await resp.Content.ReadAsStringAsync();
+                            var result = await resp.Content.ReadAsStringAsync();
+                            Info($"{service.UpdatePack}->请求结果：[{result}]");
                             //client.PostAsync(service.OpenUrl, default).ContinueWith(res => res.Result.Content.ReadAsStringAsync().Wait(10000));
                         }
                         catch (Exception ex)

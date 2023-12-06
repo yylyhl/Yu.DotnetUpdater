@@ -21,9 +21,12 @@ Util.Configuration = new ConfigurationBuilder()
 .Build();
 var stopwatch = new System.Diagnostics.Stopwatch();
 var updateConf = Util.Configuration.GetSection("DeployServices").Get<UpdateServiceConf[]>();
+//var list = new List<UpdateServiceConf>();
+//Util.Configuration.Bind("DeployServices", list);
+//var updateConf = list.ToArray();
 if (updateConf == null || !updateConf.Any())
 {
-    Util.WriteYellow(">无待更新服务：appsetting.json-Services");
+    Util.WriteYellow(">无待更新服务：appsetting.json-DeployServices");
     Close(stopwatch, 1);
     return;
 }
