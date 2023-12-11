@@ -169,6 +169,10 @@
         /// </summary>
         public TimeSpan[]? RestartTimes { get; set; }
         /// <summary>
+        /// 闲置超时分钟数
+        /// </summary>
+        public int IdleTimeout { get; set; } = 1740;
+        /// <summary>
         /// 最大工作进程数
         /// </summary>
         public long MaxProcesses { get; set; } = 1;
