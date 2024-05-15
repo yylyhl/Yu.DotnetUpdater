@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Web.Administration;
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.Extensions.Configuration;
 
 namespace Yu.DotnetUpdater
 {
@@ -100,22 +101,23 @@ namespace Yu.DotnetUpdater
                 }
                 stopwatch.Start();
                 if (!CreateIISSite(service.IISConf, updatePath, service.Ports[0])) { return; }
+
                 if (mode != UpdateMode.Cold)
                 {
                     RenameTargetFile(zipFile, updatePath, service.ServiceName);
                     Info($"{service.UpdatePack}->解压Zip文件中...");
                     ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
-                    ApppoolStatusUpdate(service.IISConf.AppPool.AppPoolName, 0);
+                    ApppoolStatusUpdate(service.IISConf.AppPoolName, 0);
                     new Thread(delegate () { DelTmpFile(updatePath, 10, false); }) { IsBackground = true }.Start();
                 }
                 else
                 {
-                    ApppoolStatusUpdate(service.IISConf.AppPool.AppPoolName, 2);
+                    ApppoolStatusUpdate(service.IISConf.AppPoolName, 2);
                     StartStopSite(service.IISConf.SiteName, false);
                     Thread.Sleep(2000);
                     Info($"{service.UpdatePack}->解压Zip文件中...");
                     ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
-                    ApppoolStatusUpdate(service.IISConf.AppPool.AppPoolName, 1);
+                    ApppoolStatusUpdate(service.IISConf.AppPoolName, 1);
                     StartStopSite(service.IISConf.SiteName, true);
                 }
                 if (!string.IsNullOrWhiteSpace(service.IISConf.OpenUrl))
@@ -211,25 +213,15 @@ namespace Yu.DotnetUpdater
         /// <summary>
         /// 创建IIS站点
         /// </summary>
-        /// <param name="siteName">站点名称</param>
-        /// <param name="appPoolName">程序池名称</param>
+        /// <param name="iisConfig">iisConfig</param>
         /// <param name="path">站点文件路径</param>
         /// <param name="port">端口</param>
-        /// <param name="hostName">主机名</param>
-        /// <param name="certName">证书存储的名称</param>
-        /// 
-        /// <param name="mode">0：集成模式，1：经典模式</param>
-        /// <param name="clrVersion">0：无托管代码，1：.NET CLR v4.0，2：.NET CLR v2.0</param>
-        /// <param name="disallowOverlappingRotation">禁用重叠回收，若程序不支持多实例运行则设置为true</param>
-        /// <param name="queueLength">队列长度</param>
-        /// <param name="restartMinutes">回收间隔分钟数</param>
-        /// <param name="restartTimes">回收时间</param>
-        /// <param name="maxProcesses">最大进程数</param>
         private static bool CreateIISSite(IISSiteConf iisConfig, string path, int port)
         {
             try
             {
-                if (iisConfig == null || iisConfig.AppPool==null)
+                var appPoolConf = Util.Configuration.GetSection("IISAppPoolCom").Get<IISAppPoolCom>();
+                if (iisConfig == null || appPoolConf == null)
                 {
                     WriteRed($"缺少 iis/appPool 配置");
                     return false;
@@ -243,7 +235,8 @@ namespace Yu.DotnetUpdater
                 var serverManager = new ServerManager();
                 var site = serverManager.Sites[iisConfig.SiteName];
                 if (site != null) return true;
-                if (!CreateAppPool(iisConfig.AppPool)) { return default; }
+                appPoolConf.AppPoolName = iisConfig.AppPoolName;
+                if (!CreateAppPool(appPoolConf)) { return default; }
                 if (!Directory.Exists(path))
                 {
                     WriteYellow("站点目录不存在");
@@ -251,7 +244,7 @@ namespace Yu.DotnetUpdater
                 }
                 site = serverManager.Sites.Add(iisConfig.SiteName, path, port);
                 site.ServerAutoStart = true;
-                site.Applications["/"].ApplicationPoolName = iisConfig.AppPool.AppPoolName;
+                site.Applications["/"].ApplicationPoolName = iisConfig.AppPoolName;
                 site.Applications["/"].SetAttributeValue("preloadEnabled", iisConfig.PreloadEnabled);
                 string bindPrev = site.Bindings[0].Host.Split(new char[] { '.' })[0];
                 if (!string.IsNullOrWhiteSpace(iisConfig.DomainName))
@@ -327,15 +320,8 @@ namespace Yu.DotnetUpdater
         /// <summary>
         /// 创建应用程序池
         /// </summary>
-        /// <param name="appPoolName">程序池名称</param>
-        /// <param name="mode">0：集成模式，1：经典模式</param>
-        /// <param name="clrVersion">0：无托管代码，1：.NET CLR v4.0，2：.NET CLR v2.0</param>
-        /// <param name="disallowOverlappingRotation">禁用重叠回收，若程序不支持多实例运行则设置为true</param>
-        /// <param name="queueLength">队列长度</param>
-        /// <param name="restartMinutes">回收间隔分钟数</param>
-        /// <param name="restartTimes">回收时间</param>
-        /// <param name="maxProcesses">最大进程数</param>
-        private static bool CreateAppPool(AppPoolConf appPoolConf)
+        /// <param name="appPoolConf">appPoolConf</param>
+        private static bool CreateAppPool(IISAppPoolCom appPoolConf)
         {
             try
             {
@@ -350,15 +336,8 @@ namespace Yu.DotnetUpdater
                 if (appPool != null) return true;
                 serverManager.ApplicationPools.Add(appPoolConf.AppPoolName);
                 appPool = serverManager.ApplicationPools[appPoolConf.AppPoolName];
-                appPool.StartMode = appPoolConf.StartMode == 0 ? StartMode.OnDemand : StartMode.AlwaysRunning;
-                if (appPoolConf.ManagedPipelineMode == 0)
-                {
-                    appPool.ManagedPipelineMode = ManagedPipelineMode.Integrated;//集成模式托管
-                }
-                else
-                {
-                    appPool.ManagedPipelineMode = ManagedPipelineMode.Classic;//经典模式托管 
-                }
+                appPool.StartMode = appPoolConf.StartMode;
+                appPool.ManagedPipelineMode = appPoolConf.ManagedPipelineMode;
                 appPool.QueueLength = appPoolConf.QueueLength;
                 if (appPoolConf.ManagegRuntimeVersion == 1)
                 {
@@ -372,12 +351,12 @@ namespace Yu.DotnetUpdater
                 {
                     appPool.ManagedRuntimeVersion = string.Empty;
                 }
-                appPool.Recycling.DisallowRotationOnConfigChange = appPoolConf.DisallowRotationOnConfigChange;
-                appPool.Recycling.DisallowOverlappingRotation = appPoolConf.DisallowOverlappingRotation;
-                appPool.Recycling.PeriodicRestart.Time = TimeSpan.FromMinutes(appPoolConf.RestartMinutes);//回收间隔分钟数
-                if (appPoolConf.RestartTimes != null)
+                appPool.Recycling.DisallowRotationOnConfigChange = appPoolConf.Recycling.DisallowRotationOnConfigChange;
+                appPool.Recycling.DisallowOverlappingRotation = appPoolConf.Recycling.DisallowOverlappingRotation;
+                appPool.Recycling.PeriodicRestart.Time = TimeSpan.FromMinutes(appPoolConf.Recycling.RestartMinutes);
+                if (appPoolConf.Recycling.RestartTimes != null)
                 {
-                    foreach (var ts in appPoolConf.RestartTimes)
+                    foreach (var ts in appPoolConf.Recycling.RestartTimes)
                     {
                         appPool.Recycling.PeriodicRestart.Schedule.Add(ts);
                     }
@@ -390,17 +369,24 @@ namespace Yu.DotnetUpdater
                     | RecyclingLogEventOnRecycle.PrivateMemory
                     | RecyclingLogEventOnRecycle.Schedule
                     | RecyclingLogEventOnRecycle.Time;
-                appPool.Recycling.PeriodicRestart.Memory = 40960000;
+                appPool.Recycling.PeriodicRestart.Memory = 0;
                 appPool.Recycling.PeriodicRestart.PrivateMemory = 0;
 
-                appPool.ProcessModel.IdleTimeout = TimeSpan.FromMinutes(0);
-                appPool.ProcessModel.MaxProcesses = appPoolConf.MaxProcesses;
-                appPool.ProcessModel.ShutdownTimeLimit = TimeSpan.FromSeconds(90);//关闭时间限制设置为90秒
-                appPool.ProcessModel.LoadUserProfile = appPoolConf.LoadUserProfile;
+                appPool.ProcessModel.IdleTimeout = TimeSpan.FromMinutes(appPoolConf.ProcessModel.IdleTimeout);
+                appPool.ProcessModel.MaxProcesses = appPoolConf.ProcessModel.MaxProcesses;
+                appPool.ProcessModel.ShutdownTimeLimit = TimeSpan.FromSeconds(appPoolConf.ProcessModel.ShutdownTimeLimit);
+                appPool.ProcessModel.LoadUserProfile = appPoolConf.ProcessModel.LoadUserProfile;
 
-                appPool.Cpu.Limit = 80000;
-                appPool.Cpu.Action = ProcessorAction.KillW3wp;
-                appPool.Failure.RapidFailProtection = false;
+                appPool.Cpu.Limit = appPoolConf.CPU.Limit;
+                appPool.Cpu.ResetInterval = TimeSpan.FromMinutes(appPoolConf.CPU.ResetInterval);
+                //appPool.Cpu.Action = (ProcessorAction)appPoolConf.CPU.Action;
+                appPool.Cpu.Action = appPoolConf.CPU.Action;
+
+                appPool.Failure.RapidFailProtection = appPoolConf.Failure.RapidFailProtection;
+                //appPool.Failure.LoadBalancerCapabilities = (LoadBalancerCapabilities)appPoolConf.Failure.LoadBalancerCapabilities;
+                appPool.Failure.LoadBalancerCapabilities = appPoolConf.Failure.LoadBalancerCapabilities;
+                appPool.Failure.RapidFailProtectionInterval = TimeSpan.FromMinutes(appPoolConf.Failure.RapidFailProtectionInterval);
+                appPool.Failure.RapidFailProtectionMaxCrashes = appPoolConf.Failure.RapidFailProtectionMaxCrashes;
                 appPool.AutoStart = true;
                 serverManager.CommitChanges();
                 //Thread.Sleep(1000);

@@ -126,59 +126,124 @@
         public string CertPwd { get; set; }
 
         /// <summary>
-        /// 应用程序池配置
+        /// 程序池名称；
         /// </summary>
-        public AppPoolConf AppPool { get; set; }
+        public string AppPoolName { get; set; }
     }
-    public class AppPoolConf
+    /// <summary>
+    /// 应用程序池通用配置
+    /// </summary>
+    public class IISAppPoolCom
     {
         /// <summary>
         /// 程序池名称；
         /// </summary>
         public string AppPoolName { get; set; }
-        /// <summary>
-        /// 启动模式 0:OnDemand, 1:AlwaysRunning
-        /// </summary>
-        public int StartMode { get; set; } = 1;
-        /// <summary>
-        /// 托管管道模式：0:Integrated, 1:Classic
-        /// </summary>
-        public int ManagedPipelineMode { get; set; } = 0;
+
         /// <summary>
         /// .NET CLR Version：0:无, 1:v4.0, 2:v2.0
         /// </summary>
         public int ManagegRuntimeVersion { get; set; }
         /// <summary>
-        /// 禁止配置更新时回收
+        /// 托管管道模式：0:Integrated, 1:Classic
         /// </summary>
-        public bool DisallowRotationOnConfigChange { get; set; }
+        public Microsoft.Web.Administration.ManagedPipelineMode ManagedPipelineMode { get; set; }
         /// <summary>
-        /// 禁用重叠回收
+        /// 启动模式 0:OnDemand, 1:AlwaysRunning
         /// </summary>
-        public bool DisallowOverlappingRotation { get; set; }
+        public Microsoft.Web.Administration.StartMode StartMode { get; set; }
         /// <summary>
         /// 队列长度
         /// </summary>
         public long QueueLength { get; set; } = 1000;
+
         /// <summary>
-        /// 回收间隔分钟数
+        /// CPU
+        /// </summary>
+        public AppPoolCpuConf CPU { get; set; }
+        /// <summary>
+        /// 回收
+        /// </summary>
+        public AppPoolRecyclingConf Recycling { get; set; }
+        /// <summary>
+        /// 进程模型
+        /// </summary>
+        public AppPoolProcessModelConf ProcessModel { get; set; }
+        /// <summary>
+        /// 快速故障防护
+        /// </summary>
+        public AppPoolFailureConf Failure { get; set; }
+    }
+    public class AppPoolCpuConf
+    {
+        /// <summary>
+        /// cpu-限制间隔分钟数
+        /// </summary>
+        public int ResetInterval { get; set; }
+        /// <summary>
+        /// cpu-使用限制百分比
+        /// </summary>
+        public long Limit { get; set; }
+        /// <summary>
+        /// cpu-使用限制超出时动作：0:NoAction, 1:KillW3WP, 2:Throttle, 3:ThrottleUnderLoad
+        /// </summary>
+        public Microsoft.Web.Administration.ProcessorAction Action { get; set; }
+    }
+    public class AppPoolRecyclingConf
+    {
+        /// <summary>
+        /// 回收-禁止配置更新时回收
+        /// </summary>
+        public bool DisallowRotationOnConfigChange { get; set; }
+        /// <summary>
+        /// 回收-禁用重叠回收
+        /// </summary>
+        public bool DisallowOverlappingRotation { get; set; }
+        /// <summary>
+        /// 回收-间隔分钟数
         /// </summary>
         public int RestartMinutes { get; set; } = 1740;
         /// <summary>
-        /// 回收时间
+        /// 回收-回收时间
         /// </summary>
         public TimeSpan[]? RestartTimes { get; set; }
+    }
+    public class AppPoolProcessModelConf
+    {
         /// <summary>
-        /// 闲置超时分钟数
+        /// 进程模型-闲置超时分钟数
         /// </summary>
         public int IdleTimeout { get; set; } = 1740;
         /// <summary>
-        /// 最大工作进程数
+        /// 进程模型-最大工作进程数
         /// </summary>
         public long MaxProcesses { get; set; } = 1;
         /// <summary>
-        /// 加载用户配置文件
+        /// 进程模型-加载用户配置文件
         /// </summary>
         public bool LoadUserProfile { get; set; }
+        /// <summary>
+        /// 进程模型-关闭时间限制/秒
+        /// </summary>
+        public int ShutdownTimeLimit { get; set; } = 90;
+    }
+    public class AppPoolFailureConf
+    {
+        /// <summary>
+        /// 快速故障防护-是否启用
+        /// </summary>
+        public bool RapidFailProtection { get; set; } = true;
+        /// <summary>
+        /// 快速故障防护-[服务不可用]响应类型：0:HttpLevel, 1:TcpLevel
+        /// </summary>
+        public Microsoft.Web.Administration.LoadBalancerCapabilities LoadBalancerCapabilities { get; set; }
+        /// <summary>
+        /// 快速故障防护-间隔分钟数
+        /// </summary>
+        public int RapidFailProtectionInterval { get; set; } = 5;
+        /// <summary>
+        /// 快速故障防护-最大故障数
+        /// </summary>
+        public int RapidFailProtectionMaxCrashes { get; set; } = 5;
     }
 }
