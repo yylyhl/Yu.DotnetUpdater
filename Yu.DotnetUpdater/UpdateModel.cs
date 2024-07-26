@@ -211,6 +211,10 @@
     public class AppPoolProcessModelConf
     {
         /// <summary>
+        /// 进程模型-闲置超时操作
+        /// </summary>
+        public Microsoft.Web.Administration.IdleTimeoutAction IdleTimeoutAction { get; set; }
+        /// <summary>
         /// 进程模型-闲置超时分钟数
         /// </summary>
         public int IdleTimeout { get; set; } = 1740;

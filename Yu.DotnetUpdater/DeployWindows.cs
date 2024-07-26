@@ -129,8 +129,12 @@ namespace Yu.DotnetUpdater
                         try
                         {
                             using var client = new HttpClient();
-                            var resp = await client.PostAsync(service.IISConf.OpenUrl, default);
-                            var result = await resp.Content.ReadAsStringAsync();
+                            HttpContent content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new { id = 0, name = "start" }));
+                            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                            content.Headers.Add("Version", "999.999.999");
+                            var response = await client.PostAsync(service.IISConf.OpenUrl, content);
+                            response.EnsureSuccessStatusCode();
+                            var result = await response.Content.ReadAsStringAsync();
                             Info($"{service.UpdatePack}->请求结果：[{result}]");
                             //client.PostAsync(service.OpenUrl, default).ContinueWith(res => res.Result.Content.ReadAsStringAsync().Wait(10000));
                         }
@@ -372,6 +376,7 @@ namespace Yu.DotnetUpdater
                 appPool.Recycling.PeriodicRestart.Memory = 0;
                 appPool.Recycling.PeriodicRestart.PrivateMemory = 0;
 
+                appPool.ProcessModel.IdleTimeoutAction = appPoolConf.ProcessModel.IdleTimeoutAction;
                 appPool.ProcessModel.IdleTimeout = TimeSpan.FromMinutes(appPoolConf.ProcessModel.IdleTimeout);
                 appPool.ProcessModel.MaxProcesses = appPoolConf.ProcessModel.MaxProcesses;
                 appPool.ProcessModel.ShutdownTimeLimit = TimeSpan.FromSeconds(appPoolConf.ProcessModel.ShutdownTimeLimit);
