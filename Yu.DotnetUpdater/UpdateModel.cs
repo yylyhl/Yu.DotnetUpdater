@@ -109,6 +109,9 @@
         /// 站点名称；
         /// </summary>
         public string SiteName { get; set; }
+        /// <summary>
+        /// 预加载
+        /// </summary>
         public bool PreloadEnabled { get; set; } = true;
 
         public string DomainName { get; set; }
@@ -147,11 +150,11 @@
         /// <summary>
         /// 托管管道模式：0:Integrated, 1:Classic
         /// </summary>
-        public Microsoft.Web.Administration.ManagedPipelineMode ManagedPipelineMode { get; set; }
+        public Microsoft.Web.Administration.ManagedPipelineMode ManagedPipelineMode { get; set; } = Microsoft.Web.Administration.ManagedPipelineMode.Integrated;
         /// <summary>
         /// 启动模式 0:OnDemand, 1:AlwaysRunning
         /// </summary>
-        public Microsoft.Web.Administration.StartMode StartMode { get; set; }
+        public Microsoft.Web.Administration.StartMode StartMode { get; set; } = Microsoft.Web.Administration.StartMode.AlwaysRunning;
         /// <summary>
         /// 队列长度
         /// </summary>
@@ -179,7 +182,7 @@
         /// <summary>
         /// cpu-限制间隔分钟数
         /// </summary>
-        public int ResetInterval { get; set; }
+        public int ResetInterval { get; set; } = 5;
         /// <summary>
         /// cpu-使用限制百分比
         /// </summary>
@@ -187,7 +190,7 @@
         /// <summary>
         /// cpu-使用限制超出时动作：0:NoAction, 1:KillW3WP, 2:Throttle, 3:ThrottleUnderLoad
         /// </summary>
-        public Microsoft.Web.Administration.ProcessorAction Action { get; set; }
+        public Microsoft.Web.Administration.ProcessorAction Action { get; set; } = Microsoft.Web.Administration.ProcessorAction.NoAction;
     }
     public class AppPoolRecyclingConf
     {
@@ -200,9 +203,9 @@
         /// </summary>
         public bool DisallowOverlappingRotation { get; set; }
         /// <summary>
-        /// 回收-间隔分钟数
+        /// 回收-间隔分钟数,default=1740
         /// </summary>
-        public int RestartMinutes { get; set; } = 1740;
+        public int RestartMinutes { get; set; } = 0;
         /// <summary>
         /// 回收-回收时间
         /// </summary>
@@ -211,13 +214,13 @@
     public class AppPoolProcessModelConf
     {
         /// <summary>
-        /// 进程模型-闲置超时操作
+        /// 进程模型-闲置超时操作：0:Terminate, 1:Suspend
         /// </summary>
-        public Microsoft.Web.Administration.IdleTimeoutAction IdleTimeoutAction { get; set; }
+        public Microsoft.Web.Administration.IdleTimeoutAction IdleTimeoutAction { get; set; } = Microsoft.Web.Administration.IdleTimeoutAction.Terminate;
         /// <summary>
         /// 进程模型-闲置超时分钟数
         /// </summary>
-        public int IdleTimeout { get; set; } = 1740;
+        public int IdleTimeout { get; set; } = 0;
         /// <summary>
         /// 进程模型-最大工作进程数
         /// </summary>
@@ -230,6 +233,10 @@
         /// 进程模型-关闭时间限制/秒
         /// </summary>
         public int ShutdownTimeLimit { get; set; } = 90;
+        /// <summary>
+        /// 进程模型-标识类型：0:LocalSystem, 1:LocalService, 2:NetworkService, 3:SpecificUser, 4:ApplicationPoolIdentity
+        /// </summary>
+        public Microsoft.Web.Administration.ProcessModelIdentityType IdentityType { get; set; } = Microsoft.Web.Administration.ProcessModelIdentityType.ApplicationPoolIdentity;
     }
     public class AppPoolFailureConf
     {
@@ -238,9 +245,9 @@
         /// </summary>
         public bool RapidFailProtection { get; set; } = true;
         /// <summary>
-        /// 快速故障防护-[服务不可用]响应类型：0:HttpLevel, 1:TcpLevel
+        /// 快速故障防护-[服务不可用]响应类型：0:HttpLevel(503), 1:TcpLevel(重置连接)
         /// </summary>
-        public Microsoft.Web.Administration.LoadBalancerCapabilities LoadBalancerCapabilities { get; set; }
+        public Microsoft.Web.Administration.LoadBalancerCapabilities LoadBalancerCapabilities { get; set; } = Microsoft.Web.Administration.LoadBalancerCapabilities.HttpLevel;
         /// <summary>
         /// 快速故障防护-间隔分钟数
         /// </summary>

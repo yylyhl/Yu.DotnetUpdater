@@ -380,6 +380,7 @@ namespace Yu.DotnetUpdater
                 appPool.ProcessModel.IdleTimeout = TimeSpan.FromMinutes(appPoolConf.ProcessModel.IdleTimeout);
                 appPool.ProcessModel.MaxProcesses = appPoolConf.ProcessModel.MaxProcesses;
                 appPool.ProcessModel.ShutdownTimeLimit = TimeSpan.FromSeconds(appPoolConf.ProcessModel.ShutdownTimeLimit);
+                appPool.ProcessModel.IdentityType = appPoolConf.ProcessModel.IdentityType;
                 appPool.ProcessModel.LoadUserProfile = appPoolConf.ProcessModel.LoadUserProfile;
 
                 appPool.Cpu.Limit = appPoolConf.CPU.Limit;
