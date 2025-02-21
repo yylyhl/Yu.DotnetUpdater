@@ -4,10 +4,11 @@
     "DeployPath": "部署目录，linux：/home/deploy/；windows：D:\\Deploy\\；",
     "NginxConfPath": "nginx站点配置所在目录，linux：/etc/nginx/conf.d；windows：C:\\Program Files\\nginx\\conf\\conf.d；"
   },
+  "DeployPath1": "D:\\Deploy\\",
+  "DeployPath2": "D:\\Deploy\\",
+  "DeployPath3": "C:\\Deploy\\",
   "DeployPath": "D:\\Deploy\\",
   "NginxConfPath": "C:\\Program Files\\nginx\\conf\\conf.d",
-  "DeployPath2": "/home/yyl/Deploy/Yu.DotnetUpdater",
-  "NginxConfPath2": "/etc/nginx/conf.d",
   "IISAppPoolCom": {
     "CLRVersion": 0,
     "ManagedPipelineMode": 0,
@@ -50,7 +51,6 @@
       "ServiceDescription": "",
       "KillOldWaitSeconds": 0,
 
-      "OpenUrl": "http://localhost:8000/",
       "SystemdService": "ServiceName.service",
 
       "Intro": "windows/linux下服务"
@@ -72,7 +72,6 @@
       "BakPorts": [ 0 ],
 
       "NginxConf": "ServiceName.conf",
-      "OpenUrl": "http://localhost:8001/",
 
       "intro": "windows/linux下服务，有端口监听，nginx代理"
     },

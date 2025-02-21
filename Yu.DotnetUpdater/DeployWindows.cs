@@ -69,10 +69,12 @@ namespace Yu.DotnetUpdater
                 if (services[i].IISConf != null && !string.IsNullOrWhiteSpace(services[i].IISConf.SiteName))
                 {
                     IISSiteUpdate(services[i], zipFile, updatePath, updateMode);
+                    AccessService(services[i].UpdatePack, services[i].IISConf.OpenUrl);
                 }
                 else
                 {
                     UpdateService(updateMode, services[i], zipFile, deployPath, updatePath);
+                    AccessService(services[i].UpdatePack, services[i].OpenUrl);
                 }
                 stopwatch.Stop();
                 WriteGreen($"[{services[i].UpdatePack}]更新耗时:{stopwatch.ElapsedMilliseconds}ms");
@@ -80,7 +82,34 @@ namespace Yu.DotnetUpdater
             }
         }
         #endregion
+        private static void AccessService(string updatePack, string openUrl)
+        {
 
+            if (!string.IsNullOrWhiteSpace(openUrl))
+            {
+                Thread.Sleep(2000);
+                Task.Run(async () =>
+                {
+                    Info($"{updatePack}->请求一次：{openUrl}");
+                    try
+                    {
+                        using var client = new HttpClient();
+                        HttpContent content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new { id = 0, name = "start" }));
+                        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                        content.Headers.Add("Version", "999.999.999");
+                        var response = await client.PostAsync(openUrl, content);
+                        response.EnsureSuccessStatusCode();
+                        var result = await response.Content.ReadAsStringAsync();
+                        Info($"{updatePack}->请求结果：[{result}]");
+                        //client.PostAsync(openUrl, default).ContinueWith(res => res.Result.Content.ReadAsStringAsync().Wait(10000));
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteRed($"请求url出错[{openUrl}]{ex.Message}]", ex);
+                    }
+                });
+            }
+        }
         #region IIS站点更新
         /// <summary>
         /// IIS站点更新
@@ -119,30 +148,6 @@ namespace Yu.DotnetUpdater
                     ZipFile.ExtractToDirectory(zipFile, updatePath, Encoding.UTF8, true);
                     ApppoolStatusUpdate(service.IISConf.AppPoolName, 1);
                     StartStopSite(service.IISConf.SiteName, true);
-                }
-                if (!string.IsNullOrWhiteSpace(service.IISConf.OpenUrl))
-                {
-                    Thread.Sleep(2000);
-                    Task.Run(async () =>
-                    {
-                        Info($"{service.UpdatePack}->请求一次：{service.IISConf.OpenUrl}");
-                        try
-                        {
-                            using var client = new HttpClient();
-                            HttpContent content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new { id = 0, name = "start" }));
-                            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-                            content.Headers.Add("Version", "999.999.999");
-                            var response = await client.PostAsync(service.IISConf.OpenUrl, content);
-                            response.EnsureSuccessStatusCode();
-                            var result = await response.Content.ReadAsStringAsync();
-                            Info($"{service.UpdatePack}->请求结果：[{result}]");
-                            //client.PostAsync(service.OpenUrl, default).ContinueWith(res => res.Result.Content.ReadAsStringAsync().Wait(10000));
-                        }
-                        catch (Exception ex)
-                        {
-                            WriteRed($"请求url出错[{service.IISConf.OpenUrl}]{ex.Message}]", ex);
-                        }
-                    });
                 }
             }
             catch (Exception ex)

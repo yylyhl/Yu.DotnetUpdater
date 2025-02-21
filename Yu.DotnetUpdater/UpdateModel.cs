@@ -97,6 +97,11 @@
         /// [windows下iis代理] 站点/应用程序池配置 
         /// </summary>
         public IISSiteConf IISConf { get; set; }
+
+        /// <summary>
+        /// 更新后访问一次OpenUrl让后续响应更快；
+        /// </summary>
+        public string OpenUrl { get; set; }
     }
 
     public class IISSiteConf
