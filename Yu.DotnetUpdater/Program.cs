@@ -18,7 +18,8 @@ Util.Info("将待更新的项目各自打包(projectName.zip)放置本程序根�
 Util.Info(string.Empty); 
 
 Util.Configuration = new ConfigurationBuilder()
-.Add(new Microsoft.Extensions.Configuration.Json.JsonConfigurationSource { Path = Path.Combine(AppContext.BaseDirectory, "appsettings.json"), ReloadOnChange = true })
+//.Add(new Microsoft.Extensions.Configuration.Json.JsonConfigurationSource { Path = Path.Combine(AppContext.BaseDirectory, "appsettings.json"), ReloadOnChange = true })
+.Add(new Microsoft.Extensions.Configuration.Json.JsonConfigurationSource { Path = "appsettings.json", ReloadOnChange = true })
 //.Add(new Microsoft.Extensions.Configuration.Json.JsonConfigurationSource { Path = "updatesettings.json", ReloadOnChange = true })
 .Build();
 var stopwatch = new System.Diagnostics.Stopwatch();
