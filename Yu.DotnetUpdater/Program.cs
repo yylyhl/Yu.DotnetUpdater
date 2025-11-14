@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Configuration;
 using Yu.DotnetUpdater;
 
+Console.OutputEncoding = System.Text.Encoding.UTF8;
 #region 初始化 加载配置
 string processName = System.Diagnostics.Process.GetCurrentProcess().ProcessName;
 _ = new Mutex(true, processName, out bool FirstOpen);
@@ -11,12 +12,13 @@ if (FirstOpen == false)
     Environment.Exit(0);
 }
 Console.Title = "服务更新工具";
+Console.WriteLine($"---服务更新工具---");
 Util.WriteGreen("待更新的项目各自配置文件需提前手动更新好，如appsettings.json");
 Util.Info("将待更新的项目各自打包(projectName.zip)放置本程序根目录下");
 Util.Info(string.Empty); 
 
 Util.Configuration = new ConfigurationBuilder()
-.Add(new Microsoft.Extensions.Configuration.Json.JsonConfigurationSource { Path = "appsettings.json", ReloadOnChange = true })
+.Add(new Microsoft.Extensions.Configuration.Json.JsonConfigurationSource { Path = Path.Combine(AppContext.BaseDirectory, "appsettings.json"), ReloadOnChange = true })
 //.Add(new Microsoft.Extensions.Configuration.Json.JsonConfigurationSource { Path = "updatesettings.json", ReloadOnChange = true })
 .Build();
 var stopwatch = new System.Diagnostics.Stopwatch();
