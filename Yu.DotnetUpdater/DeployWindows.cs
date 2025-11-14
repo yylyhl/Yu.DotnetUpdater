@@ -90,22 +90,40 @@ namespace Yu.DotnetUpdater
                 Thread.Sleep(2000);
                 Task.Run(async () =>
                 {
-                    Info($"{updatePack}->请求一次：{openUrl}");
+                    Info($"{updatePack}->Get请求一次：{openUrl}");
                     try
                     {
                         using var client = new HttpClient();
-                        HttpContent content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new { id = 0, name = "start" }));
+                        client.DefaultRequestHeaders.Add("ContentType","application/json");
+                        client.DefaultRequestHeaders.Add("Version", "999.999.999");
+                        var response = await client.GetAsync(openUrl);
+                        response.EnsureSuccessStatusCode();
+                        var result = await response.Content.ReadAsStringAsync();
+                        Info($"{updatePack}->Get请求结果：[{result}]");
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteRed($"Get请求url出错[{openUrl}]{ex.Message}]", ex);
+                    }
+                });
+                Task.Run(async () =>
+                {
+                    Info($"{updatePack}->Post请求一次：{openUrl}");
+                    try
+                    {
+                        using var client = new HttpClient();
+                        //HttpContent content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new { id = 2, name = "start" }));
+                        HttpContent content = new StringContent("id=2");
                         content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
                         content.Headers.Add("Version", "999.999.999");
                         var response = await client.PostAsync(openUrl, content);
                         response.EnsureSuccessStatusCode();
                         var result = await response.Content.ReadAsStringAsync();
-                        Info($"{updatePack}->请求结果：[{result}]");
-                        //client.PostAsync(openUrl, default).ContinueWith(res => res.Result.Content.ReadAsStringAsync().Wait(10000));
+                        Info($"{updatePack}->Post请求结果：[{result}]");
                     }
                     catch (Exception ex)
                     {
-                        WriteRed($"请求url出错[{openUrl}]{ex.Message}]", ex);
+                        WriteRed($"Post请求url出错[{openUrl}]{ex.Message}]", ex);
                     }
                 });
             }
