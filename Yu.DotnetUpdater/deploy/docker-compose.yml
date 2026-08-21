@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  appserv1:
+    image: harbor.demain.com/myimages/img-app1:${APP_VERSION:-v1.0.0} #APP_VERSION=v1.0.3 docker-compose pull && docker-compose up -d
+    container_name: container-myapp1-1
+    restart: unless-stopped # 开机自启、崩溃重启，手动stop后不再拉起
+    ports:
+      - "8080:8080"
+    volumes:
+      # 配置文件/日志目录挂载
+      - /home/deploy/config/app1/appsettings.json:/app/appsettings.json:ro
+      - /home/deploy/config/app/appsettings.json:/app/appsettings.json:ro
+      - /home/deploy/logs/app1:/app/logs
+    environment:
+      - TZ=Asia/Shanghai
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+
+
+# 看容器状态
+## docker compose ps
+
+#启动全部容器/单个容器
+## docker compose up -d
+## docker compose up -d app2
+
+#停止全部容器/单个容器
+## docker compose stop
+## docker compose stop app2
+
+#重启全部/单个容器
+## docker compose restart
+## docker compose restart app2
+
+#查看所有容器状态
+## docker compose ps
+
+#销毁所有容器（镜像保留）
+## docker compose down
+
+# 停止并销毁单个容器，然后重新启动新建容器
+## docker compose rm -f app2 && docker compose up -d app2
+
+# 进入容器排查
+## docker compose exec -it myapp bash
+
+# 读取`Dockerfile`，基于源码重新构建新镜，默认标签为`latest`
+## docker compose build && docker compose up -d
+
+# 登录镜像仓库
+## docker login harbor.domain.com
+# 从远程镜像仓库拉取已经构建好的镜像，创建并启动容器
+## docker compose pull && docker compose up -d
+
+# 构建并打上版本号 1.0.2
+## APP_VERSION=1.0.2 docker compose build
+## APP_VERSION=1.0.2 docker compose up -d

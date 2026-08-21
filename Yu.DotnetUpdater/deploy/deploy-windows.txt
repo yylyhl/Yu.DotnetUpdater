@@ -188,3 +188,8 @@ https://github.com/rabbitmq/rabbitmq-delayed-message-exchange/releases
 关闭:rabbitmq-server stop
 重启:rabbitmq-server restart
 状态:rabbitmq-server status
+
+
+
+【清理文件】
+cd /d D:/deploy/projectname/Log/2019/05 && del /f /q  "*2019-05-*"

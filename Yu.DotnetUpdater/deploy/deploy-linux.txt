@@ -1,5 +1,10 @@
 # 全部书写区分大小写
 
+##发行版名称+版本号：
+uname -a
+cat /etc/issue
+lsb_release -a
+
 【基本配置】
 《root密码》
 sudo passwd root
@@ -10,16 +15,38 @@ sudo chmod -R 777 /usr/lib/systemd/system
 
 
 《SSH》
-安装ssh:sudo apt-get install openssh-server
+安装ssh:sudo apt-get install openssh-server -y
 重启ssh服务:sudo service ssh restart/systemctl restart ssh
-修改远程访问权限，PermitRootLogin为yes:vi /etc/ssh/sshd_config
+远程访问权限，PermitRootLogin为yes:vi /etc/ssh/sshd_config
+开机自启：sudo systemctl enable ssh
 
 
 《更改时区，默认是0时区》
+将时区更改为东八区：sudo timedatectl set-timezone Asia/Shanghai
+检查当前时区：timedatectl
 运行tzselect 设置时区:tzselect=》选择4亚洲, 回车=》选择9中国, 回车=>选择1北京, 回车=>选择1yes, 回车
 将相应时区文件复制到/etc目录下:sudo cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 查看时间:date -R
 
+
+【！！！注意！！！】
+Ubuntu 无人值守更新升级 libssl/openssl/libc 这类核心库，
+会触发动态库热替换，强制回收依赖进程，进程被内核直接强制终止。
+解决方案一：禁止自动更新 底层 ssl/libc 核心库（最小影响）
+  sudo nano /etc/apt/apt.conf.d/50unattended-upgrades
+  在 Unattended-Upgrade::Package-Blacklist 大括号内添加：
+	"libssl*";
+	"openssl*";
+	"libc-bin";
+	"libc6*";
+	
+    "zlib*";
+    "libgcc*";
+    "libstdc++*";
+  保存退出：Ctrl+O → 回车 → Ctrl+X
+解决方案二：关闭无人值守自动更新（彻底杜绝，高危漏洞需手动定期执行 apt update && apt upgrade）
+  sudo dpkg-reconfigure -plow unattended-upgrades
+  在弹出的对话框选择 <No> ，回车确认，关闭自动更新。
 
 《更改关机等待进程超时时间》
 Ubuntu16.04之后默认安装了snapd，关机/重启时会出现：a stop job is running for snap daemon
@@ -215,16 +242,24 @@ sudo apt-get update &&\
 
 【安装依赖】
 apt install ffmpeg
+apt install unzip
 
 
 【项目部署运行】
-《单项目手动部署更新方式（通过shell窗口执行程序时，要端口的程序在命令前需加nohup，否则shell断开后程序会挂掉）》
+《手动部署更新方式（通过shell窗口执行程序时，要端口的程序在命令前需加nohup，否则shell断开后程序会挂掉）》
+#单文件覆盖更新：unzip -o /home/deploy/projectName.zip -d /home/deploy/projectName
+#多文件覆盖更新到指定字符开头的目录:
+  unzip -o /home/deploy/projectPrefix.Name.zip -d /home/Deploy/projectPrefix*/
+  cd /home/deploy && for f in projectPrefix.*.zip; do unzip -o "$f" -d "/home/deploy/${f%.zip}/"; done
+#多文件覆盖更新-shell方式：
+  for target_dir in /home/deploy/projectPrefix.Name /home/deploy/projectPrefix.Name /home/deploy/projectPrefix.Name2; do sudo unzip -o projectPrefix.Name.zip -d "$target_dir"; done
+
 kill -15/9 pidvalue && cd /home/deploy/projectName && nohup dotnet projectName.dll --urls=https://*:port &
 kill -15/9 pidvalue && cd /home/deploy/projectName && nohup dotnet projectName.dll &
 # 清理nohup.out：cp /dev/null nohup.out
 
 
-《半自动(批量/单个)部署更新方式（区分大小写）》
+《工具部署更新方式（区分大小写）》
 待更新项目按[项目名称]打包为zip文件,拷贝指Yu.DotnetUpdater目录下
 Yu.DotnetUpdater下appsetting.json文件提前配置好
 需nginx代理的项目需指定默认端口
@@ -259,10 +294,17 @@ tail -c +4 old_file > new_file
 
 
 
-
 【常用命令】
 
-查看文件内容:cat  /etc/hosts
+列出文件及更新时间：
+名称时间-倒序：ls -lt --time-style=long-iso | awk '{print $6, $7, $8}'
+名称时间-正序：ls -ltr --time-style=long-iso | awk '{print $6, $7, $8}'
+ls -l --time-style=long-iso
+ls -lt --time-style=long-iso
+ls -ltr --time-style=long-iso
+cd /tmp && ls -ltr --time-style=long-iso | awk '{print $6, $7, $8}'
+
+查看文件内容:cat/more /etc/hosts
 
 编辑文件:
   打开:vi filename + enter + i
@@ -277,7 +319,6 @@ cp -r *.conf /etc
 rm -rf bak
 rm -f 4686547__horxeton.com.*
 
-查看发行本号:cat /etc/issue
 
 ubuntu查看系统资源占用（内存,cpu和进程)
   1.top 查看ubuntu的资源占用，htop 美化的文字界面
@@ -305,6 +346,97 @@ ubuntu查看系统资源占用（内存,cpu和进程)
 查看磁盘使用：df -h
 查看文件目录占用：du -sh *
 https://blog.csdn.net/xxmonstor/article/details/81298042
-不用停止WEB服务就可以清空nohup.out的命令
+【清理nohup.out】
 cp /dev/null nohup.out
 cat /dev/null > nohup.out
+
+【清理文件】
+rm -rf /home/deploy/projectname/Log/2019/05/*2019-05-1*
+
+
+【打包】
+cd /home/deploy/projectname/Log/2019/05 && tar -czvf 0516.tar.gz Error_2019-05-16*
+nice -n 19 ionice -c 2 -n 7 tar -zcf /home/deploy/projectname.Log.tar.gz -C /home/deploy/projectname/Log . \
+#参数详解（性能控制重点）
+nice -n 19
+##Linux CPU 最低优先级 (19)，系统繁忙时自动让出 CPU，不抢占业务进程
+#ionice -c 2 -n 7
+##IO 调度优先级最低，磁盘读写礼让其他程序；
+##-c2 普通调度，-n7 最低等级；不要用 - c3 空闲 IO，部分内核不稳定
+tar -zcf
+tar -Jcf
+##-J xz 更高压缩率，更耗CPU；-z gzip 快速压缩；c 创建包；v verbose 显示详细打包文件列表（打印正在打包的文件）；f file 指定输出文件,必须放在最后
+-C /home/deploy/projectname .
+##切换目录到 /home/deploy/projectname，打包目录内所有内容（不把外层文件夹路径打进压缩包）
+##如果写成 tar -zcf xxx.tar.gz /home/deploy/projectname,压缩包内顶层是/home/deploy/projectname；
+
+##搭配 nohup + & 后台运行（避免 ssh 断开中断任务），输出日志方便排查：
+nohup nice -n 19 ionice -c 2 -n 7 tar -zcf /home/deploy.tar.gz -C /home/deploy . > /tmp/pack_log.txt 2>&1 &
+##使用 --exclude排除指定目录或文件：
+nice -n 19 ionice -c 2 -n 7 tar -zcf /home/deploy.tar.gz -C /home/deploy . --exclude=./start --exclude=*.pdb --exclude=*.dll --exclude=*.exe
+
+复制覆盖：\cp /home/deploy/projectname/appsettings.json -d /tmp/appsettings.json
+
+【查找指定时间范围内的文件】
+find /home/deploy/projectname/Log/2019/05 -type f  -newermt "2019-05-26 10:07:00" ! -newermt "2019-05-26 14:15:00"
+
+
+#从指定文件中查找带有指定字符串的行数据  
+##限制文件类型 --include="*.txt"
+##nice将进程优先级设为最低（19），不影响其他进程
+###显示文件名和行号
+nice -n 19 grep -rn "aaa" /home/deploy/projectname/Log/2019/01/Info_2019-01-25* --include="*.txt"
+nice -n 19 grep -rn "aaa" /home/deploy/projectname/Log/2019/01
+
+###只显示文件名
+nice -n 19 grep -rl "aaa" /home/deploy/projectname/Log/2019/01/Info_2019-01-25* --include="*.txt"
+nice -n 19 grep -rl "aaa" /home/deploy/projectnameLog/2019/01 --include="*.txt"
+
+
+cat ~/.bashrc
+#【linux-nano】
+打开：nano /home/Deploy/appsettings.json
+保存：Ctrl+O，回车
+退出：Ctrl+X
+保存：Ctrl+U
+查找文本：Ctrl+W
+查找下一个：Alt+W
+撤销：Alt+U
+恢复：Alt+E
+
+#【linux-vim/vi】
+vim /home/Deploy/appsettings.json
+vim /home/Deploy/ECHO.Transaction.IMServer /appsettings.json
+i -- 切换到输入模式，在光标当前位置开始输入文本。
+x -- 删除当前光标所在处的字符。
+: -- 切换到底线命令模式，以在最底一行输入命令。
+a -- 进入插入模式，在光标下一个位置开始输入文本。
+o：在当前行的下方插入一个新行，并进入插入模式。
+O -- 在当前行的上方插入一个新行，并进入插入模式。
+dd -- 剪切当前行。
+yy -- 复制当前行。
+p（小写） -- 粘贴剪贴板内容到光标下方。
+P（大写）-- 粘贴剪贴板内容到光标上方。
+u -- 撤销上一次操作。
+Ctrl + r -- 重做上一次撤销的操作。
+:w -- 保存文件。
+
+:w 保存文件但不退出vi 
+:w file 将修改另外保存到file中，不退出vi
+:w! 强制保存，不推出vi
+:wq 保存文件并退出vi
+:wq! 强制保存文件，并退出vi
+:q 不保存文件，退出vi
+:q! 不保存文件，强制退出vi
+:e! 放弃所有修改，从上次保存文件开始再编辑命令历史
+
+
+
+【curl】
+curl -H "Content-Type:application/json" -H "version:12.11" -H "from:mtt" -H "Authorization:Bearer eyJhbGciOiJo" -X POST -d {} http://127.0.0.1:83/oaa
+curl -H "Content-Type:application/json" -H "version:12.11" -H "from:mtt" -H "Authorization:Bearer eyJhbGciOiJo" -X POST -d '{"keyword":"","type":0}' http://127.0.0.1:83/oaa
+
+curl -H "Content-Type:application/json" \
+-H "version:12.11" -H "from:mtt" -H "Authorization:Bearer eyJhbGciOiJo" \
+-X POST -d '{"keyword":"","type":0}' \ 
+http://127.0.0.1:83/oaa
