@@ -90,10 +90,11 @@ docker run -d \
   --name container-myapp1-1 \
   --restart unless-stopped \
   -p 8082:8080 \
-  -v /etc/localtime:/etc/localtime:ro \
   -v /home/deploy/config/myapp1:/app/config:ro \
   -v /home/deploy/config/common:/app/config-com:ro \
   -v /home/deploy/logs/myapp1:/app/logs \
+  -v /etc/localtime:/etc/localtime:ro \
+  -e TZ=Asia/Shanghai \
   -e ASPNETCORE_URLS="http://+:8080" \
   img-app1:latest
 ```
@@ -107,10 +108,11 @@ docker run -d \
   --name container-myapp1-1 \
   --restart unless-stopped \
   -p 8082:8080 \
-  -v /etc/localtime:/etc/localtime:ro \
   -v /home/deploy/config/myapp1:/app/config:ro \
   -v /home/deploy/config/common:/app/config-com:ro \
   -v /home/deploy/logs/myapp1:/app/logs \
+  -v /etc/localtime:/etc/localtime:ro \
+  -e TZ=Asia/Shanghai \
   -e ASPNETCORE_URLS="http://+:8080" \
   img-app1:latest
 ```
@@ -174,10 +176,11 @@ docker run -d \
   --name container-myapp1-1 \
   --restart unless-stopped \
   -p 8082:8080 \
-  -v /etc/localtime:/etc/localtime:ro \
   -v /home/deploy/config/myapp1:/app/config:ro \
   -v /home/deploy/config/common:/app/config-com:ro \
   -v /home/deploy/logs/myapp1:/app/logs \
+  -v /etc/localtime:/etc/localtime:ro \
+  -e TZ=Asia/Shanghai \
   -e ASPNETCORE_URLS="http://+:8080" \
   img-app1:latest
 ```
