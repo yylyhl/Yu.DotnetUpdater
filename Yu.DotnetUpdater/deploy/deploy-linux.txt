@@ -1,4 +1,53 @@
 # 全部书写区分大小写
+##开机时间
+uptime
+who -b
+last reboot
+
+##linux 登录记录
+who：显示当前登录用户及终端信息。
+w：显示当前登录用户及其正在执行的任务。
+users：列出当前登录的用户名。
+last：显示历史登录记录，可通过 -n <数字> 限制条数，-u <用户名> 查看指定用户，-F 显示完整时间，-i 显示 IP 地址 
+lastb：查看失败的登录尝试，需要 root 权限。
+lastlog：查询每个用户的最后一次登录时间。
+ac：统计用户总的登录时间。
+sudo > /var/log/wtmp：清空所有记录
+/var/log/wtmp：记录所有用户的登录、注销以及系统启动和关机事件，可用 last 命令查看历史登录记录 
+/var/log/btmp：记录登录失败的尝试，如密码错误或无效用户，可用 lastb 命令查看 
+/var/log/lastlog：记录每个用户的最后一次登录时间，可用 lastlog 命令查询 
+/var/log/secure 或 auth.log：记录认证相关信息，包括 SSH 登录和可疑 IP 登录次数
+
+
+##linux 操作记录
+```
+#完整历史记录，grep按过滤条件：
+history
+HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S " history
+HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S " history | grep "apt install"
+#最近10条命令：
+history 10
+#清除所有历史记录：
+history -c && history -w && > ~/.bash_history && history -c
+#删除第1010条
+history -d 1010
+```
+
+# 精确删除登录记录并清空操作记录
+```
+# 将 wtmp 导出为文本
+sudo utmpdump /var/log/wtmp > wtmp.txt
+# 编辑 wtmp.txt（i--切换到输入模式，esc--退出编辑，:q!--不保存并强制退出，:wq!--强制保存并退出）
+vim wtmp.txt
+# 重新导入并删除wtmp.txt
+sudo utmpdump -r wtmp.txt > /var/log/wtmp
+sudo rm -f wtmp.txt
+# 查看登录记录：last
+# 清理当前会话历史操作记录：
+history -cw
+# 关shell窗口
+```
+
 
 ##发行版名称+版本号：
 uname -a
@@ -419,8 +468,8 @@ p（小写） -- 粘贴剪贴板内容到光标下方。
 P（大写）-- 粘贴剪贴板内容到光标上方。
 u -- 撤销上一次操作。
 Ctrl + r -- 重做上一次撤销的操作。
-:w -- 保存文件。
-
+esc：退出编辑
+:w
 :w 保存文件但不退出vi 
 :w file 将修改另外保存到file中，不退出vi
 :w! 强制保存，不推出vi

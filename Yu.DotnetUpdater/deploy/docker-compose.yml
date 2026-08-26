@@ -1,21 +1,31 @@
 version: '3.8'
-
+# echo "$HARBOR_PASSWORD" | docker login harbor.demain.com -u "$HARBOR_USER"
+# APP_VERSION=<versionTag> docker-compose pull && docker-compose up -d <container_name>
+#
+# sudo cd /home/deploy && sudo docker load --input image_name.tar
+# APP_VERSION=<versionTag> docker-compose up -d <container_name>
 services:
-  appserv1:
+  myapp1:
     image: harbor.demain.com/myimages/img-app1:${APP_VERSION:-v1.0.0} #APP_VERSION=v1.0.3 docker-compose pull && docker-compose up -d
+    #build: #仅限构建
+    #  context: .
+    #  dockerfile: myapp/Dockerfile
     container_name: container-myapp1-1
     restart: unless-stopped # 开机自启、崩溃重启，手动stop后不再拉起
     ports:
       - "8080:8080"
     volumes:
       # 配置文件/日志目录挂载
-      - /home/deploy/config/app1/appsettings.json:/app/appsettings.json:ro
-      - /home/deploy/config/app/appsettings.json:/app/appsettings.json:ro
+      - /home/deploy/config/app1:/app/config:ro
+      - /home/deploy/config/common:/app/config-com:ro
       - /home/deploy/logs/app1:/app/logs
     environment:
       - TZ=Asia/Shanghai
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:8080
+      #- ASPNETCORE_URLS=https://+:443;http://+:8080
+      #- ASPNETCORE_Kestrel__Certificates__Default__Path=/https/mycert.pfx
+      #- ASPNETCORE_Kestrel__Certificates__Default__Password=your_cert_password
 
 
 # 看容器状态
