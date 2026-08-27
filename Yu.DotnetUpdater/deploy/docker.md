@@ -28,93 +28,61 @@ sudo systemctl start docker
 sudo docker run hello-world
 ```
 
-# 【构建镜像部署流程（在源码根目录[Dockerfile]）】
-## 1.本地构建上传服务器
+# 【3.构建镜像部署流程（在源码根目录[Dockerfile]）】
 ```
 # 进入目录打包镜像
 cd D:\Code\slnPath
-cd D:\Code\slnPath\img-app1
-docker build --progress plain -f ./img-app1/Dockerfile -t img-app1:latest -t img-app1:1.0.0 .
-# 将镜像导出为文件
-docker save -o img-app1.tar img-app1:1.0.0
-docker save img-app1:1.0.0 | gzip > img-app1.tar.gz
-# 上传至服务器，然后导入镜像：
-scp img-app1.tar root@192.168.1.11:/home/deploy/images/
-docker load --input img-app1.tar
-docker load -i img-app1.tar
-# 确认镜像是否成功加载：
-docker images | grep img-app1
+cd D:\Code\slnPath\myapp
 ```
-
-## 2.本地构建推送-服务器拉取
-### 2.1本地构建推送
+### 3.1.1本地构建后上传服务器，服务器导入镜像
 ```
-# 本地登录镜像仓库
-docker login harbor.domain.com
-
 # 构建镜像：在解决方案同级目录执行 build，指定 Dockerfile 路径。
-docker build --progress plain -f ./img-app1/Dockerfile -t harbor.domain.com/myimages/img-app1:1.0.0 -t harbor.domain.com/myimages/img-app1:latest
+docker build --progress plain -f ./myapp/Dockerfile -t myapp:latest -t myapp:1.0.0 .
+# 将镜像导出为文件
+docker save -o myapp.tar myapp:1.0.0
+docker save myapp:1.0.0 | gzip > myapp.tar.gz
+# 上传至服务器，然后导入镜像：
+scp myapp.tar root@192.168.1.11:/home/deploy/images/
+docker load --input myapp.tar
+docker load -i myapp.tar
+# 确认镜像是否成功加载：
+docker images | grep myapp
+```
+
+### 3.1.2.本地构建推送仓库，服务器拉取
+```
+# 构建镜像：在解决方案同级目录执行 build，指定 Dockerfile 路径。
+docker build --progress plain -f ./myapp/Dockerfile -t registry.example.com/myimages/myapp:1.0.0 -t registry.example.com/myimages/myapp:latest
 # 或
 VERSION="v1.0.9"
-docker build --progress plain -f ./img-app1/Dockerfile -t harbor.domain.com/myimages/img-app1:${VERSION} .
-docker tag harbor.domain.com/myimages/img-app1:${VERSION} harbor.domain.com/myimages/img-app1:latest
+docker build --progress plain -f ./myapp/Dockerfile -t registry.example.com/myimages/myapp:${VERSION} .
+docker tag registry.example.com/myimages/myapp:${VERSION} registry.example.com/myimages/myapp:latest
 
+# 本地登录镜像仓库
+echo "your_password" | docker login registry.example.com --username your_username --password-stdin
 # 推送镜像
-docker push harbor.domain.com/myimages/img-app1:${VERSION}
-docker push harbor.domain.com/myimages/img-app1:latest
-```
-### 2.2服务器拉取部署
-```
+docker push registry.example.com/myimages/myapp:${VERSION}
+docker push registry.example.com/myimages/myapp:latest
+
 # 服务器登录镜像仓库
-docker login harbor.domain.com
-
-## 服务器首次部署命令
-cd /home/deploy
-
-## 拉取镜像
-docker pull
-
-## 创建并启动容器
-docker up -d
-
+echo "your_password" | docker login registry.example.com --username your_username --password-stdin
 ## 拉新镜像
-docker pull harbor.domain.com/myimages/img-app1:latest
-
-## 重建容器启动。不能直接更新，只能停止并删掉重建。:
-## Dockerfile里：RUN mkdir -p /app/config /app/logs
-## sudo chmod -R 777 /home/deploy
-docker stop container-myapp1-1 && \
-docker rm container-myapp1-1 && \
-#挂载整个/app目录，会遮蔽镜像内原有的/app内容
+docker pull registry.example.com/myimages/myapp:latest
+```
+### 3.2.重建容器启动
+```
+docker stop deploy-myapp1-1 && docker rm deploy-myapp1-1
+#挂载宿主机目录到/app目录，会遮蔽镜像内/app原有的内容
 docker run -d \
   --name container-myapp1-1 \
   --restart unless-stopped \
   -p 8082:8080 \
-  -v /home/deploy/config/myapp1:/app/config:ro \
-  -v /home/deploy/config/common:/app/config-com:ro \
   -v /home/deploy/logs/myapp1:/app/logs \
+  -v /home/deploy/config/myapp1:/app/config:ro \
   -v /etc/localtime:/etc/localtime:ro \
   -e TZ=Asia/Shanghai \
   -e ASPNETCORE_URLS="http://+:8080" \
-  img-app1:latest
-```
-
-### 3.重建容器启动。不能直接更新，只能停止并删掉重建。:
-```
-docker stop container-myapp1-1 && \
-docker rm container-myapp1-1 && \
-#挂载整个/app目录，会遮蔽镜像内原有的/app内容
-docker run -d \
-  --name container-myapp1-1 \
-  --restart unless-stopped \
-  -p 8082:8080 \
-  -v /home/deploy/config/myapp1:/app/config:ro \
-  -v /home/deploy/config/common:/app/config-com:ro \
-  -v /home/deploy/logs/myapp1:/app/logs \
-  -v /etc/localtime:/etc/localtime:ro \
-  -e TZ=Asia/Shanghai \
-  -e ASPNETCORE_URLS="http://+:8080" \
-  img-app1:latest
+  myapp:latest
 ```
 
 # 【 Docker 命令】
@@ -126,22 +94,22 @@ docker inspect aspnet:latest
 ### 镜像构建历史:
 docker history redis:latest
 ### 删除指定镜像:
-docker rmi img-app1:latest
+docker rmi myapp:latest
 ### 删除<none>悬空镜像（构建残留、无标签、无引用）:
 docker image prune
 ### 清理所有未被使用的镜像(谨慎):
 docker image prune -a
 ### 给镜像新增别名:docker tag SOURCE_IMAGE[:TAG] TARGET_IMAGE[:TAG]
-docker tag img-app1:latest img-app1:v1.0.0
-## 导出镜像
-docker save -o img-app1.tar img-app1:1.0.0
-docker save img-app1:1.0.0 | gzip > img-app1.tar.gz
+docker tag myapp:latest myapp:v1.0.0
+### 导出镜像
+docker save -o myapp.tar myapp:1.0.0
+docker save myapp:1.0.0 | gzip > myapp.tar.gz
 ### 导入镜像：
-docker load --input img-app1.tar
-docker load -i img-app1.tar
+docker load --input myapp.tar
+docker load -i myapp.tar
 ### 使用Dockerfile构建，打标签:
 ```
-docker build --progress plain -f ./img-app1/Dockerfile -t img-app1:latest -t img-app1:v1.0.0 .
+docker build --progress plain -f ./myapp/Dockerfile -t myapp:latest -t myapp:v1.0.0 .
 
 ```
 ### 查看容器使用的镜像ID:
@@ -161,11 +129,11 @@ docker logs container-myapp1-1
 docker exec -it 容器id/容器名称 ls /app
 docker exec -it 容器id/容器名称 cat /app/appsettings.json
 ```
-### 停止容器:
+### 停止容器，给容器10秒时间优雅退出:
 docker stop container-myapp1-1
 ### 重启容器:
 docker restart container-myapp1-1
-### 销毁容器（镜像挂载保留）:
+### 强制停止并删除容器:
 docker rm -f net10-app1 container-myapp1-1
 ### 启动旧容器:
 docker start container-myapp1-1
@@ -182,7 +150,7 @@ docker run -d \
   -v /etc/localtime:/etc/localtime:ro \
   -e TZ=Asia/Shanghai \
   -e ASPNETCORE_URLS="http://+:8080" \
-  img-app1:latest
+  myapp:latest
 ```
 
 

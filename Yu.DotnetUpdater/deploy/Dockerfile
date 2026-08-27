@@ -6,28 +6,31 @@ USER $APP_UID
 WORKDIR /app
 EXPOSE 9000
 
-
 # 此阶段用于生成服务项目
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+# 安装 tzdata，时区改为东八区
+RUN apt-get update && apt-get install -y tzdata && \
+    ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo "Asia/Shanghai" > /etc/timezone
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["projectname/projectname.csproj", "projectname/"]
-COPY ["ECHO.Common.ApiResponse/ECHO.Common.ApiResponse.csproj", "ECHO.Common.ApiResponse/"]
-COPY ["ECHO.Common.AwsS3/ECHO.Common.AwsS3.csproj", "ECHO.Common.AwsS3/"]
-COPY ["ECHO.Common.CoreHelper/ECHO.Common.CoreHelper.csproj", "ECHO.Common.CoreHelper/"]
-COPY ["ECHO.Common.FreeSqlHelper/ECHO.Common.FreeSqlHelper.csproj", "ECHO.Common.FreeSqlHelper/"]
-COPY ["ECHO.Common.IMHelper/ECHO.Common.IMHelper.csproj", "ECHO.Common.IMHelper/"]
-COPY ["ECHO.Common.TencentCos/ECHO.Common.TencentCos.csproj", "ECHO.Common.TencentCos/"]
-COPY ["ECHO.Transaction.Blockchain/ECHO.Transaction.Blockchain.csproj", "ECHO.Transaction.Blockchain/"]
-COPY ["ECHO.Transaction.Entity/ECHO.Transaction.Entity.csproj", "ECHO.Transaction.Entity/"]
-COPY ["ECHO.Transaction.Enums/ECHO.Transaction.Enums.csproj", "ECHO.Transaction.Enums/"]
-COPY ["ECHO.Transaction.RedisHelper/ECHO.Transaction.RedisHelper.csproj", "ECHO.Transaction.RedisHelper/"]
-COPY ["ECHO.Common.FreeRedisHelper/ECHO.Common.FreeRedisHelper.csproj", "ECHO.Common.FreeRedisHelper/"]
-COPY ["ECHO.Transaction.ModelData/ECHO.Transaction.ModelData.csproj", "ECHO.Transaction.ModelData/"]
-COPY ["ECHO.Transaction.IMData/ECHO.Transaction.IMData.csproj", "ECHO.Transaction.IMData/"]
-COPY ["ECHO.Transaction.ModelRedis/ECHO.Transaction.ModelRedis.csproj", "ECHO.Transaction.ModelRedis/"]
-COPY ["ECHO.Transaction.MongoHelper/ECHO.Transaction.MongoHelper.csproj", "ECHO.Transaction.MongoHelper/"]
-COPY ["ECHO.Common.MongoHelper/ECHO.Common.MongoHelper.csproj", "ECHO.Common.MongoHelper/"]
+COPY ["My.Common.ApiResponse/My.Common.ApiResponse.csproj", "My.Common.ApiResponse/"]
+COPY ["My.Common.AwsS3/My.Common.AwsS3.csproj", "My.Common.AwsS3/"]
+COPY ["My.Common.CoreHelper/My.Common.CoreHelper.csproj", "My.Common.CoreHelper/"]
+COPY ["My.Common.FreeSqlHelper/My.Common.FreeSqlHelper.csproj", "My.Common.FreeSqlHelper/"]
+COPY ["My.Common.IMHelper/My.Common.IMHelper.csproj", "My.Common.IMHelper/"]
+COPY ["My.Common.TencentCos/My.Common.TencentCos.csproj", "My.Common.TencentCos/"]
+COPY ["My.Transaction.Blockchain/My.Transaction.Blockchain.csproj", "My.Transaction.Blockchain/"]
+COPY ["My.Transaction.Entity/My.Transaction.Entity.csproj", "My.Transaction.Entity/"]
+COPY ["My.Transaction.Enums/My.Transaction.Enums.csproj", "My.Transaction.Enums/"]
+COPY ["My.Transaction.RedisHelper/My.Transaction.RedisHelper.csproj", "My.Transaction.RedisHelper/"]
+COPY ["My.Common.FreeRedisHelper/My.Common.FreeRedisHelper.csproj", "My.Common.FreeRedisHelper/"]
+COPY ["My.Transaction.ModelData/My.Transaction.ModelData.csproj", "My.Transaction.ModelData/"]
+COPY ["My.Transaction.IMData/My.Transaction.IMData.csproj", "My.Transaction.IMData/"]
+COPY ["My.Transaction.ModelRedis/My.Transaction.ModelRedis.csproj", "My.Transaction.ModelRedis/"]
+COPY ["My.Transaction.MongoHelper/My.Transaction.MongoHelper.csproj", "My.Transaction.MongoHelper/"]
+COPY ["My.Common.MongoHelper/My.Common.MongoHelper.csproj", "My.Common.MongoHelper/"]
 RUN dotnet restore "./projectname/projectname.csproj"
 COPY . .
 WORKDIR "/src/projectname"
@@ -42,7 +45,7 @@ RUN dotnet publish "./projectname.csproj" -c $BUILD_CONFIGURATION -o /app/publis
 FROM base AS final
 WORKDIR /app
 
-# 创建容器内配置、日志目录，后续宿主机volume挂载，需与代码中设置的路径保持一致
+# 创建容器内配置、日志目录，后续宿主机volume挂载，需与代码中设置的路径保持一致 #挂载宿主机目录到/app目录，会遮蔽镜像内/app原有的内容
 RUN mkdir -p /app/Log /app/config /app/start /app/crash && chmod 777 /app/Log /app/config /app/start /app/crash
 
 COPY --from=publish /app/publish .
@@ -51,43 +54,45 @@ ENTRYPOINT ["dotnet", "projectname.dll"]
 
 
 # cd projectname
-# docker build --progress plain -f ./projectname/Dockerfile -t echo.transaction.admin:latest -t echo.transaction.admin:1.0.0 .
+# docker build --progress plain -f ./projectname/Dockerfile -t My.Transaction.admin:latest -t My.Transaction.admin:1.0.0 .
 
-# docker save -o echo.transaction.admin.tar echo.transaction.admin:1.0.0
-# docker save echo.transaction.admin:1.0.0 | gzip > echo.transaction.admin.tar.gz
+# docker save -o My.Transaction.admin.tar My.Transaction.admin:1.0.0
+# docker save My.Transaction.admin:1.0.0 | gzip > My.Transaction.admin.tar.gz
 
-# docker load --input echo.transaction.admin.tar
-# docker load -i echo.transaction.admin.tar
+# docker load --input My.Transaction.admin.tar
+# docker load -i My.Transaction.admin.tar
 
-# sudo mkdir -p /home/deploy/config/echo.transaction.admin /home/deploy/logs/echo.transaction.admin
+# sudo mkdir -p /home/deploy/config/My.Transaction.admin /home/deploy/logs/My.Transaction.admin
 # sudo chmod -R 777 /home/deploy
 
 # 重建容器启动
-# docker stop echo.transaction.admin && docker rm echo.transaction.admin
+# docker stop My.Transaction.admin && docker rm My.Transaction.admin
 # docker run -d \
-#   --name echo.transaction.admin \
+#   --name My.Transaction.admin \
 #   --restart unless-stopped \
 #   -p 9201:9201 \
-#   -v /home/deploy/logs/echo.transaction.admin:/app/Log \
-#   -v /home/deploy/logs/echo.transaction.admin:/app/config \
-#   -v /home/deploy/logs/echo.transaction.admin:/app/start \
-#   -v /home/deploy/logs/echo.transaction.admin:/app/crash \
-#   -v /home/deploy/config/echo.transaction.admin/appsettings.json:/app/appsettings.json:ro \
-#   -v /home/deploy/config/echo.transaction.admin/appsettingsApi.json:/app/appsettingsApi.json:ro \
-#   -v /home/deploy/config/echo.transaction.admin/appsettingsDB.json:/app/appsettingsDB.json:ro \
-#   -v /home/deploy/config/echo.transaction.admin/appsettingsReqChainApi.json:/app/appsettingsReqChainApi.json:ro \
-#   -v /home/deploy/config/echo.transaction.admin/appsettingsReqChainToken.json:/app/appsettingsReqChainToken.json:ro \
-#   -v /home/deploy/config/echo.transaction.admin/appsettingsTrade.json:/app/appsettingsTrade.json:ro \
-#   -v /home/deploy/config/echo.transaction.admin/appsettingsTradeLimit.json:/app/appsettingsTradeLimit.json:ro \
-#   -v /home/deploy/config/echo.transaction.admin/appsettingsOss.json:/app/appsettingsOss.json:ro \
-#   -v /home/deploy/config/echo.transaction.admin/appsettingsSms.json:/app/appsettingsSms.json:ro \
-#   -v /home/deploy/config/echo.transaction.admin/appsettingsRateLimit.json:/app/appsettingsRateLimit.json:ro \
-#   -v /home/deploy/config/echo.transaction.admin/appsettingsSmsAliyun.json:/app/appsettingsSmsAliyun.json:ro \
-#   -v /home/deploy/config/echo.transaction.admin/appsettingsMetrics.json:/app/appsettingsMetrics.json:ro \
+#   -v /home/deploy/start/My.Transaction.admin:/app/start \
+#   -v /home/deploy/crash/My.Transaction.admin:/app/crash \
+#   -v /home/deploy/logs/My.Transaction.admin:/app/Log \
+#   -v /home/deploy/config/My.Transaction.admin:/app/config \
+#   -v /home/deploy/config/My.Transaction.admin/appsettings.json:/app/appsettings.json:ro \
+#   -v /home/deploy/config/My.Transaction.admin/appsettingsApi.json:/app/appsettingsApi.json:ro \
+#   -v /home/deploy/config/My.Transaction.admin/appsettingsDB.json:/app/appsettingsDB.json:ro \
+#   -v /home/deploy/config/My.Transaction.admin/appsettingsReqChainApi.json:/app/appsettingsReqChainApi.json:ro \
+#   -v /home/deploy/config/My.Transaction.admin/appsettingsReqChainToken.json:/app/appsettingsReqChainToken.json:ro \
+#   -v /home/deploy/config/My.Transaction.admin/appsettingsTrade.json:/app/appsettingsTrade.json:ro \
+#   -v /home/deploy/config/My.Transaction.admin/appsettingsTradeLimit.json:/app/appsettingsTradeLimit.json:ro \
+#   -v /home/deploy/config/My.Transaction.admin/appsettingsOss.json:/app/appsettingsOss.json:ro \
+#   -v /home/deploy/config/My.Transaction.admin/appsettingsSms.json:/app/appsettingsSms.json:ro \
+#   -v /home/deploy/config/My.Transaction.admin/appsettingsRateLimit.json:/app/appsettingsRateLimit.json:ro \
+#   -v /home/deploy/config/My.Transaction.admin/appsettingsSmsAliyun.json:/app/appsettingsSmsAliyun.json:ro \
+#   -v /home/deploy/config/My.Transaction.admin/appsettingsMetrics.json:/app/appsettingsMetrics.json:ro \
+#   -v /etc/localtime:/etc/localtime:ro \
+#   -e TZ=Asia/Shanghai \
 #   -e ASPNETCORE_URLS="http://+:9201" \
 #   -e ASPNETCORE_ENVIRONMENT=Production \
 #   -e ASPNETCORE_Kestrel__Certificates__Default__Path="" \
 #   -e ASPNETCORE_Kestrel__Certificates__Default__Password="" \
-#   echo.transaction.admin:1.0.0
+#   My.Transaction.admin:1.0.0
 
-# sudo docker logs echo.transaction.admin
+# sudo docker logs My.Transaction.admin
