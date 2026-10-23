@@ -154,6 +154,14 @@ tasklist /fi “imagename eq nginx.exe”
 netstat -ano | findstr 30090
 ##删除进程（删除命令进程后就无法执行nignx命令，删除应用进程后nginx就会停止）
 taskkill /f /pid 13568
+##进程命令
+查看进程列表：tasklist
+查看指定进程：
+tasklist | findstr /i "进程名"
+[PowerShell]Get-Process -Name "进程名" -ErrorAction SilentlyContinue
+按进程名结束：taskkill /IM 进程名.exe /F
+按进程id结束：taskkill /PID 进程id /F
+结束进程及子进程：taskkill /F /T /IM 进程名.exe
 
 【nginx---END】
 

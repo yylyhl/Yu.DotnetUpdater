@@ -374,9 +374,9 @@ namespace Yu.DotnetUpdater
             process.StartInfo.RedirectStandardError = redirectStandardOutput;
             process.StartInfo.RedirectStandardOutput = redirectStandardOutput;
             //process.StartInfo.RedirectStandardInput = redirectStandardOutput;
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-            process.StartInfo.CreateNoWindow = true;
+            process.StartInfo.UseShellExecute = false;//[UseShellExecute=true]进程继承当前控制台，独立窗口
+            process.StartInfo.CreateNoWindow = true;//[CreateNoWindow=true]后台进程，拥有自己的进程句柄和生命周期。
+            process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;//[ProcessWindowStyle.Hidden]变相后台进程
             process.Start();
 
             //process.StandardInput.WriteLine(cmdargs);
